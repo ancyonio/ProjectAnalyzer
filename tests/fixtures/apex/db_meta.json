@@ -1,0 +1,40 @@
+{
+  "_comment": "Trimmed dictionary extract for the fixture application, in the shape tools/apex_analyzer/extract produces. Exercises the mode C path: row counts, synonyms and ALL_DEPENDENCIES are only available this way.",
+  "schemas": ["ORDER_APP"],
+  "objects": [
+    {"owner": "ORDER_APP", "name": "ORDERS", "objectType": "TABLE", "status": "VALID"},
+    {"owner": "ORDER_APP", "name": "ORDER_LINES", "objectType": "TABLE", "status": "VALID"},
+    {"owner": "ORDER_APP", "name": "CUSTOMERS", "objectType": "TABLE", "status": "VALID"},
+    {"owner": "ORDER_APP", "name": "ORDER_VIEW", "objectType": "VIEW", "status": "VALID"},
+    {"owner": "ORDER_APP", "name": "ORDER_PKG", "objectType": "PACKAGE", "status": "VALID"},
+    {"owner": "ORDER_APP", "name": "ORDERS_ARCHIVE", "objectType": "TABLE", "status": "VALID"}
+  ],
+  "tables": [
+    {"owner": "ORDER_APP", "tableName": "ORDERS", "numRows": 1450000, "partitioned": "NO"},
+    {"owner": "ORDER_APP", "tableName": "ORDER_LINES", "numRows": 8300000, "partitioned": "NO"},
+    {"owner": "ORDER_APP", "tableName": "CUSTOMERS", "numRows": 42000, "partitioned": "NO"},
+    {"owner": "ORDER_APP", "tableName": "ORDERS_ARCHIVE", "numRows": 9100000, "partitioned": "YES"}
+  ],
+  "columns": [
+    {"owner": "ORDER_APP", "tableName": "ORDERS_ARCHIVE", "columnName": "ORDER_ID", "dataType": "NUMBER", "dataLength": 22, "nullable": "N", "columnId": 1},
+    {"owner": "ORDER_APP", "tableName": "ORDERS_ARCHIVE", "columnName": "ARCHIVED_ON", "dataType": "DATE", "dataLength": 7, "nullable": "Y", "columnId": 2}
+  ],
+  "programUnits": [
+    {"owner": "ORDER_APP", "packageName": "ORDER_PKG", "name": "SAVE_ORDER", "unitKind": "PROCEDURE", "argumentCount": 3},
+    {"owner": "ORDER_APP", "packageName": "ORDER_PKG", "name": "CREATE_ORDER", "unitKind": "PROCEDURE", "argumentCount": 2},
+    {"owner": "ORDER_APP", "packageName": "ORDER_PKG", "name": "ORDER_TOTAL", "unitKind": "FUNCTION", "argumentCount": 1}
+  ],
+  "synonyms": [
+    {"owner": "PUBLIC", "synonymName": "ORDERS_SYN", "tableOwner": "ORDER_APP", "tableName": "ORDERS"}
+  ],
+  "dependencies": [
+    {"owner": "ORDER_APP", "name": "ORDER_VIEW", "type": "VIEW", "referencedOwner": "ORDER_APP", "referencedName": "ORDERS", "referencedType": "TABLE"},
+    {"owner": "ORDER_APP", "name": "ORDER_VIEW", "type": "VIEW", "referencedOwner": "ORDER_APP", "referencedName": "CUSTOMERS", "referencedType": "TABLE"}
+  ],
+  "constraints": [
+    {"owner": "ORDER_APP", "constraintName": "ORDERS_CUSTOMER_FK", "constraintType": "FOREIGN_KEY", "tableName": "ORDERS", "refTable": "CUSTOMERS", "refOwner": "ORDER_APP", "columns": "CUSTOMER_ID"}
+  ],
+  "indexes": [
+    {"owner": "ORDER_APP", "indexName": "ORDERS_CUSTOMER_IX", "tableName": "ORDERS", "uniqueness": "NONUNIQUE", "columns": "CUSTOMER_ID"}
+  ]
+}

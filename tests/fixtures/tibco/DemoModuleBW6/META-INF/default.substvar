@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<repo:repository xmlns:repo="http://www.tibco.com/xmlns/repo/types/2002">
+  <globalVariables>
+    <globalVariable>
+      <name>OrderQueueName</name>
+      <value>ORDERS.INBOUND</value>
+      <type>String</type>
+      <deploymentSettable>true</deploymentSettable>
+      <serviceSettable>false</serviceSettable>
+    </globalVariable>
+    <globalVariable>
+      <name>OrderDbPassword</name>
+      <value>s3cr3t-should-not-appear</value>
+      <type>Password</type>
+      <deploymentSettable>true</deploymentSettable>
+      <serviceSettable>false</serviceSettable>
+    </globalVariable>
+  </globalVariables>
+</repo:repository>

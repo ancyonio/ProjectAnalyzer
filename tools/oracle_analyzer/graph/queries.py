@@ -1,0 +1,209 @@
+"""Cypher cookbook for the Oracle graph.
+
+The questions an analyst actually asks of a PL/SQL estate, expressed as Cypher
+for teams who load the graph into Neo4j. Emitted as a runnable `.cypher` file
+and surfaced by the `queries` command.
+"""
+from __future__ import annotations
+
+from typing import Dict, List
+
+from analyzer_core.graph.cookbook import render_cookbook as _render_cookbook
+from analyzer_core.graph.cookbook import render_markdown as _render_markdown
+
+TITLE = 'Oracle PL/SQL Knowledge Graph'
+
+CYPHER_COOKBOOK: List[Dict[str, str]] = [
+    {
+        'id': 'node-counts',
+        'title': 'Node counts by label (verification)',
+        'purpose': 'Confirm the import populated every expected label.',
+        'cypher': 'MATCH (n)\nRETURN labels(n)[0] AS NodeType, count(n) AS Count\n'
+                  'ORDER BY Count DESC;',
+    },
+    {
+        'id': 'rel-counts',
+        'title': 'Relationship counts by type (verification)',
+        'purpose': 'Confirm every semantic edge type survived the import.',
+        'cypher': 'MATCH ()-[r]->()\nRETURN type(r) AS RelationshipType, count(r) AS Count\n'
+                  'ORDER BY Count DESC;',
+    },
+    {
+        'id': 'writers-of-table',
+        'title': 'Which program units modify a table',
+        'purpose': 'The question a change to a table starts with. Uses the '
+                   'WRITES_TO roll-up, so inserts, updates and deletes all count.',
+        'cypher': 'MATCH (u:DbProgramUnit)-[:EXECUTES_SQL]->(:SqlStatement)'
+                  '-[:WRITES_TO]->(t:DbTable)\n'
+                  'WHERE t.name = $objectName\n'
+                  'RETURN DISTINCT u.packageName AS Package, u.name AS Unit,\n'
+                  '       u.filePath AS File, u.lineStart AS Line\n'
+                  'ORDER BY Package, Unit;',
+    },
+    {
+        'id': 'access-verbs',
+        'title': 'Exactly how each unit touches a table',
+        'purpose': 'The precise verb, not the roll-up: separates a reader from '
+                   'an inserter from a deleter.',
+        'cypher': 'MATCH (u:DbProgramUnit)-[:EXECUTES_SQL]->(s:SqlStatement)'
+                  '-[r:READS_FROM|INSERTS_INTO|UPDATES|DELETES_FROM]->(t:DbTable)\n'
+                  'WHERE t.name = $objectName\n'
+                  'RETURN u.name AS Unit, type(r) AS Access, count(s) AS Statements\n'
+                  'ORDER BY Unit, Access;',
+    },
+    {
+        'id': 'blast-radius',
+        'title': 'Blast radius of a table change',
+        'purpose': 'Every unit that reaches the table, directly or through a '
+                   'call chain, with the depth at which it does.',
+        'cypher': 'MATCH path = (t:DbTable {name: $objectName})\n'
+                  '             <-[:READS_FROM|WRITES_TO]-(:SqlStatement)\n'
+                  '             <-[:EXECUTES_SQL]-(:DbProgramUnit)\n'
+                  '             <-[:CALLS*0..6]-(caller:DbProgramUnit)\n'
+                  'RETURN DISTINCT caller.packageName AS Package, caller.name AS Unit,\n'
+                  '       length(path) AS Depth\n'
+                  'ORDER BY Depth, Package, Unit;',
+    },
+    {
+        'id': 'call-graph',
+        'title': 'Call chain from a unit',
+        'purpose': 'The full execution path, which is what a rewrite has to '
+                   'preserve.',
+        'cypher': 'MATCH path = (u:DbProgramUnit {name: $unitName})-[:CALLS*1..10]->(target)\n'
+                  'RETURN path\nLIMIT 100;',
+    },
+    {
+        'id': 'entry-points',
+        'title': 'Entry points',
+        'purpose': 'What the outside world can invoke: units published by a '
+                   'package spec, standalone units, and triggers.',
+        'cypher': 'MATCH (spec:PackageSpec)-[:HAS_UNIT]->(u:DbProgramUnit)\n'
+                  'RETURN u.packageName AS Package, u.name AS Unit, '
+                  "'PUBLISHED' AS Kind\n"
+                  'UNION\n'
+                  'MATCH (u:DbProgramUnit {isStandalone: true})\n'
+                  "RETURN '' AS Package, u.name AS Unit, 'STANDALONE' AS Kind\n"
+                  'UNION\n'
+                  'MATCH (t:DbTrigger)-[:FIRES_ON]->(tab:DbTable)\n'
+                  "RETURN tab.name AS Package, t.name AS Unit, 'TRIGGER' AS Kind;",
+    },
+    {
+        'id': 'spec-change-impact',
+        'title': 'Callers broken by a package spec change',
+        'purpose': 'A spec change breaks every caller; the same change to a '
+                   'body does not. This is why the two are separate nodes.',
+        'cypher': 'MATCH (p:DbPackage {name: $objectName})-[:HAS_SPEC]->(:PackageSpec)\n'
+                  '      -[:HAS_UNIT]->(published:DbProgramUnit)\n'
+                  'OPTIONAL MATCH (caller:DbProgramUnit)-[:CALLS]->(published)\n'
+                  'RETURN published.name AS PublishedUnit,\n'
+                  '       collect(DISTINCT caller.packageName + \'.\' + caller.name) AS Callers\n'
+                  'ORDER BY PublishedUnit;',
+    },
+    {
+        'id': 'hotspots',
+        'title': 'Most depended-upon objects',
+        'purpose': 'Where a change costs most. Sequence the migration around '
+                   'these.',
+        'cypher': 'MATCH (n)<-[r:CALLS|READS_FROM|WRITES_TO|DEPENDS_ON]-()\n'
+                  'WHERE n:DbTable OR n:DbView OR n:DbPackage OR n:DbProgramUnit\n'
+                  'RETURN labels(n)[0] AS Type, n.name AS Name, count(r) AS Dependents\n'
+                  'ORDER BY Dependents DESC\nLIMIT 25;',
+    },
+    {
+        'id': 'view-lineage',
+        'title': 'View lineage',
+        'purpose': 'What a view is built from, through any depth of nesting.',
+        'cypher': 'MATCH path = (v:DbView)-[:DEPENDS_ON*1..5]->(t:DbTable)\n'
+                  'RETURN v.name AS View, t.name AS BaseTable, length(path) AS Depth\n'
+                  'ORDER BY View, Depth;',
+    },
+    {
+        'id': 'table-lineage',
+        'title': 'Everything that feeds a table',
+        'purpose': 'Column-level provenance starts here: which statements write '
+                   'this table, and what they read to do it.',
+        'cypher': 'MATCH (target:DbTable {name: $objectName})<-[:WRITES_TO]-(s:SqlStatement)\n'
+                  'OPTIONAL MATCH (s)-[:READS_FROM]->(src:DbTable)\n'
+                  'OPTIONAL MATCH (u:DbProgramUnit)-[:EXECUTES_SQL]->(s)\n'
+                  'RETURN u.name AS Unit, s.verb AS Verb,\n'
+                  '       collect(DISTINCT src.name) AS ReadsFrom\n'
+                  'ORDER BY Unit;',
+    },
+    {
+        'id': 'trigger-map',
+        'title': 'Triggers and what they fire on',
+        'purpose': 'Hidden control flow: a write to a table may run code the '
+                   'caller never mentions.',
+        'cypher': 'MATCH (t:DbTrigger)-[f:FIRES_ON]->(tab:DbTable)\n'
+                  'RETURN tab.name AS Table, t.name AS Trigger,\n'
+                  '       t.triggeringEvent AS Event, t.filePath AS File\n'
+                  'ORDER BY Table, Trigger;',
+    },
+    {
+        'id': 'dynamic-sql',
+        'title': 'Where dependency analysis stops',
+        'purpose': 'Units that build SQL at runtime. Their dependencies are not '
+                   'in this graph and must not be assumed absent.',
+        'cypher': 'MATCH (u:DbProgramUnit {hasDynamicSql: true})\n'
+                  'RETURN u.packageName AS Package, u.name AS Unit,\n'
+                  '       u.filePath AS File, u.lineStart AS Line\n'
+                  'ORDER BY Package, Unit;',
+    },
+    {
+        'id': 'unresolved',
+        'title': 'Unresolved references',
+        'purpose': 'Names the analysis saw but could not bind. Quote this '
+                   'alongside any completeness claim.',
+        'cypher': 'MATCH (src)-[:UNRESOLVED]->(u:UnresolvedRef)\n'
+                  'RETURN u.name AS Reference, u.kinds AS Kinds,\n'
+                  '       count(src) AS ReferencedBy\n'
+                  'ORDER BY ReferencedBy DESC;',
+    },
+    {
+        'id': 'findings',
+        'title': 'Findings by severity',
+        'purpose': 'The rule catalogue output, most severe first.',
+        'cypher': 'MATCH (target)-[:HAS_ISSUE]->(i:Issue)\n'
+                  'OPTIONAL MATCH (i)-[:HAS_RECOMMENDATION]->(r:Recommendation)\n'
+                  'RETURN i.severity AS Severity, i.ruleId AS Rule,\n'
+                  '       i.targetName AS Target, i.description AS Finding,\n'
+                  '       r.text AS Recommendation\n'
+                  'ORDER BY CASE i.severity WHEN \'CRITICAL\' THEN 0 '
+                  "WHEN 'HIGH' THEN 1 WHEN 'MEDIUM' THEN 2 ELSE 3 END, Rule;",
+    },
+    {
+        'id': 'dead-code',
+        'title': 'Units nothing calls',
+        'purpose': 'Private body units with no caller in the analysed tree. '
+                   'Check the dynamic-SQL list before deleting any of them.',
+        'cypher': 'MATCH (body:PackageBody)-[:HAS_UNIT]->(u:DbProgramUnit)\n'
+                  'WHERE NOT ()-[:CALLS]->(u)\n'
+                  '  AND NOT (:PackageSpec)-[:HAS_UNIT]->(u)\n'
+                  'RETURN u.packageName AS Package, u.name AS Unit, u.loc AS Lines\n'
+                  'ORDER BY Lines DESC;',
+    },
+    {
+        'id': 'churn-vs-complexity',
+        'title': 'Complex code that changes often',
+        'purpose': 'Where defects concentrate: high complexity plus high churn.',
+        'cypher': 'MATCH (f:File)<-[:CHANGED]-(c:Commit)\n'
+                  'WITH f, count(c) AS Churn\n'
+                  'MATCH (f)-[:DEFINES]->()<-[:HAS_UNIT*0..1]-()\n'
+                  'MATCH (u:DbProgramUnit) WHERE u.filePath = f.filePath\n'
+                  'RETURN f.filePath AS File, Churn,\n'
+                  '       round(sum(u.complexity)) AS TotalComplexity\n'
+                  'ORDER BY Churn * TotalComplexity DESC\nLIMIT 25;',
+    },
+]
+
+
+def render_cookbook() -> str:
+    return _render_cookbook(CYPHER_COOKBOOK, TITLE,
+                            param_hint=':param objectName => "ORDERS"')
+
+
+def render_markdown() -> str:
+    return _render_markdown(
+        CYPHER_COOKBOOK, TITLE,
+        intro='Set `$objectName` or `$unitName` in Neo4j Browser before running '
+              'a parameterised query, for example `:param objectName => "ORDERS"`.')

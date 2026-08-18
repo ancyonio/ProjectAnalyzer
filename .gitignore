@@ -1,0 +1,21 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+
+# Analyzer output is reproducible from source; commit deliberately, not by default.
+analysis_output/
+!analysis_output/.gitkeep
+analysis_output_apex/
+!analysis_output_apex/.gitkeep
+analysis_output_oracle/
+!analysis_output_oracle/.gitkeep
+
+# Local credentials for scripts/push_to_neo4j.py; .env.example is the committed template.
+.env
+.env.*
+!.env.example

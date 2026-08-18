@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<repository xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <jdbcConfiguration>
+    <location>jdbc:oracle:thin:@legacy-db.internal:1521/LEGACY</location>
+    <driver>oracle.jdbc.OracleDriver</driver>
+    <Host>legacy-db.internal</Host>
+    <Port>1521</Port>
+    <username>legacy_app</username>
+    <password>#!LEGACYOBFUSCATEDPASSWORD</password>
+  </jdbcConfiguration>
+</repository>

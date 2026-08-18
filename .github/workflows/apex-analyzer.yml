@@ -1,0 +1,65 @@
+name: apex-analyzer
+
+# Gates the APEX analyzer on every change to it: the parser tests, the SQL
+# binder corpus, the determinism check and the graph's own validation gate.
+# No third-party packages, no database, no network.
+
+on:
+  push:
+    paths:
+      - 'tools/apex_analyzer/**'
+      - 'tools/analyzer_core/**'
+      - 'tests/**'
+      - '.github/workflows/apex-analyzer.yml'
+  pull_request:
+    paths:
+      - 'tools/apex_analyzer/**'
+      - 'tools/analyzer_core/**'
+      - 'tests/**'
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.9', '3.12']
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Binder corpus
+        run: python tests/test_sql_binder.py
+
+      - name: Analyzer end to end
+        run: python tests/test_apex_analyzer.py
+
+      - name: Pipeline on the fixture
+        env:
+          PYTHONPATH: tools
+        run: |
+          python -m apex_analyzer -o /tmp/apex_out all --source tests/fixtures/apex \
+            --db-meta tests/fixtures/apex/db_meta.json
+
+      - name: Validation gate (strict)
+        env:
+          PYTHONPATH: tools
+        run: python -m apex_analyzer -o /tmp/apex_out validate --strict
+
+      - name: Determinism
+        env:
+          PYTHONPATH: tools
+        run: |
+          python -m apex_analyzer -o /tmp/det1 analyze --source tests/fixtures/apex
+          python -m apex_analyzer -o /tmp/det2 analyze --source tests/fixtures/apex
+          diff /tmp/det1/neo4j_nodes.csv /tmp/det2/neo4j_nodes.csv
+          diff /tmp/det1/neo4j_relationships.csv /tmp/det2/neo4j_relationships.csv
+          diff /tmp/det1/neo4j_import.cypher /tmp/det2/neo4j_import.cypher
+
+      - name: TIBCO analyzer still imports
+        env:
+          PYTHONPATH: tools
+        run: python -c "import tibco_analyzer, tibco_analyzer.cli, tibco_analyzer.analyzer"

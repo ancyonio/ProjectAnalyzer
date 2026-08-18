@@ -1,0 +1,82 @@
+name: oracle-analyzer
+
+# Gates the Oracle analyzer on every change to it: the parser tests, the shared
+# binder corpus, the determinism check and the graph's own validation gate.
+# The APEX suite runs too, because analyzer_core/plsql is shared between them and
+# a change there can break the other analyzer silently.
+# No third-party packages, no database, no network.
+
+on:
+  push:
+    paths:
+      - 'tools/oracle_analyzer/**'
+      - 'tools/analyzer_core/**'
+      - 'tests/**'
+      - '.github/workflows/oracle-analyzer.yml'
+  pull_request:
+    paths:
+      - 'tools/oracle_analyzer/**'
+      - 'tools/analyzer_core/**'
+      - 'tests/**'
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.9', '3.12']
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Binder corpus
+        run: python tests/test_sql_binder.py
+
+      - name: Analyzer end to end
+        run: python tests/test_oracle_analyzer.py
+
+      - name: Shared core did not break the APEX analyzer
+        run: python tests/test_apex_analyzer.py
+
+      - name: Pipeline on the fixture
+        env:
+          PYTHONPATH: tools
+        run: |
+          python -m oracle_analyzer -o /tmp/oracle_out all \
+            --source tests/fixtures/oracle --schema ORDER_APP
+
+      - name: Validation gate (strict)
+        env:
+          PYTHONPATH: tools
+        run: python -m oracle_analyzer -o /tmp/oracle_out validate --strict
+
+      - name: Determinism
+        env:
+          PYTHONPATH: tools
+        run: |
+          python -m oracle_analyzer -o /tmp/det1 analyze --source tests/fixtures/oracle --schema ORDER_APP
+          python -m oracle_analyzer -o /tmp/det2 analyze --source tests/fixtures/oracle --schema ORDER_APP
+          diff /tmp/det1/neo4j_nodes.csv /tmp/det2/neo4j_nodes.csv
+          diff /tmp/det1/neo4j_relationships.csv /tmp/det2/neo4j_relationships.csv
+          diff /tmp/det1/neo4j_import.cypher /tmp/det2/neo4j_import.cypher
+
+      - name: Cookbook reference is in sync with the analyzer
+        env:
+          PYTHONPATH: tools
+        run: |
+          python -c "from oracle_analyzer.graph.queries import render_markdown; print(render_markdown())" \
+            > /tmp/cookbook.md
+          grep -c '```cypher' /tmp/cookbook.md
+          for id in writers-of-table blast-radius spec-change-impact table-lineage dynamic-sql unresolved; do
+            grep -q "\`$id\`" .github/skills/oracle-analyst/references/cypher-cookbook.md \
+              || { echo "cookbook reference is missing $id — regenerate it"; exit 1; }
+          done
+
+      - name: Sibling analyzers still import
+        env:
+          PYTHONPATH: tools
+        run: python -c "import tibco_analyzer.cli, apex_analyzer.cli, oracle_analyzer.cli"

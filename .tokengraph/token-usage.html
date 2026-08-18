@@ -1,0 +1,1477 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="description" content="ContextIQ token usage and savings for this workspace.">
+<title>ContextIQ — token usage</title>
+<style>
+/* ==== design tokens =======================================================
+   One source of truth for color, type, space, radius, elevation and motion.
+   Every component is written against these roles (never raw hex), so themes
+   and rebrands change in exactly one place. Data-mark colors are a palette
+   checked for colour-vision separation against both chart surfaces; brand
+   navy/blue is reserved for chrome so it can't be misread as a series.
+   ======================================================================= */
+:root{
+  color-scheme:light;
+  --bg:#f4f6fa;--surface:#fff;--surface-2:#f8fafc;--surface-3:#eef2f8;
+  --overlay:rgba(14,23,41,.06);
+  --fg:#0e1729;--fg-2:#334155;--muted:#5b6b83;--muted-2:#8496ae;
+  --line:#e4e9f0;--line-2:#cfd8e5;--grid:#e9eef6;
+  --brand:#2f6fed;--brand-2:#1a2b4a;--brand-3:#12203a;--brand-soft:#eaf1ff;
+  --s-sent:#2a78d6;--s-saved:#008300;--s-c3:#e87ba4;--s-c4:#eda100;
+  --s-c5:#1baf7a;--s-base:#7c8aa0;
+  --seq-0:#eef2f8;--seq-1:#cde2fb;--seq-2:#9ec5f4;--seq-3:#6da7ec;
+  --seq-4:#3987e5;--seq-5:#256abf;--seq-6:#0d366b;--track:#dde8f8;
+  --good:#0ca30c;--good-ink:#0a6b0a;--good-soft:#e6f6e6;
+  --warn:#fab219;--warn-ink:#8a5a00;--warn-soft:#fff5e0;
+  --crit:#d03b3b;--crit-ink:#a12626;--crit-soft:#fdeaea;
+  --sh-1:0 1px 2px rgba(14,23,41,.05),0 1px 3px rgba(14,23,41,.04);
+  --sh-2:0 8px 28px rgba(14,23,41,.10);
+  --r-1:8px;--r-2:12px;--r-3:16px;--r-pill:999px;
+  --sp-1:4px;--sp-2:8px;--sp-3:12px;--sp-4:16px;--sp-5:24px;--sp-6:32px;--sp-7:48px;
+  --fs-1:11px;--fs-2:12px;--fs-3:13px;--fs-4:14px;--fs-5:16px;--fs-6:20px;
+  --fs-7:28px;--fs-8:46px;
+  --font:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --ease:cubic-bezier(.2,.7,.3,1);--dur-1:120ms;--dur-2:220ms;
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#080d18;--surface:#111a2e;--surface-2:#152039;--surface-3:#1b2740;
+  --overlay:rgba(255,255,255,.07);
+  --fg:#e9effb;--fg-2:#c3d0e4;--muted:#94a5be;--muted-2:#6f819c;
+  --line:#22304d;--line-2:#2e3f63;--grid:#1e2b47;
+  --brand:#5b93ff;--brand-2:#0f1c33;--brand-3:#0a1428;--brand-soft:#182741;
+  --s-sent:#3987e5;--s-saved:#008300;--s-c3:#d55181;--s-c4:#c98500;
+  --s-c5:#199e70;--s-base:#8496ae;
+  --seq-0:#16203a;--seq-1:#104281;--seq-2:#184f95;--seq-3:#1c5cab;
+  --seq-4:#2a78d6;--seq-5:#5598e7;--seq-6:#86b6ef;--track:#1c2b49;
+  --good:#0ca30c;--good-ink:#7ee07e;--good-soft:#12301a;
+  --warn:#fab219;--warn-ink:#f0c46a;--warn-soft:#312413;
+  --crit:#d03b3b;--crit-ink:#f19a9a;--crit-soft:#331919;
+  --sh-1:0 1px 2px rgba(0,0,0,.40);--sh-2:0 10px 30px rgba(0,0,0,.45);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  color-scheme:dark;
+  --bg:#080d18;--surface:#111a2e;--surface-2:#152039;--surface-3:#1b2740;
+  --overlay:rgba(255,255,255,.07);
+  --fg:#e9effb;--fg-2:#c3d0e4;--muted:#94a5be;--muted-2:#6f819c;
+  --line:#22304d;--line-2:#2e3f63;--grid:#1e2b47;
+  --brand:#5b93ff;--brand-2:#0f1c33;--brand-3:#0a1428;--brand-soft:#182741;
+  --s-sent:#3987e5;--s-saved:#008300;--s-c3:#d55181;--s-c4:#c98500;
+  --s-c5:#199e70;--s-base:#8496ae;
+  --seq-0:#16203a;--seq-1:#104281;--seq-2:#184f95;--seq-3:#1c5cab;
+  --seq-4:#2a78d6;--seq-5:#5598e7;--seq-6:#86b6ef;--track:#1c2b49;
+  --good:#0ca30c;--good-ink:#7ee07e;--good-soft:#12301a;
+  --warn:#fab219;--warn-ink:#f0c46a;--warn-soft:#312413;
+  --crit:#d03b3b;--crit-ink:#f19a9a;--crit-soft:#331919;
+  --sh-1:0 1px 2px rgba(0,0,0,.40);--sh-2:0 10px 30px rgba(0,0,0,.45);
+}}
+
+/* ==== base ============================================================== */
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--fg);font:var(--fs-4)/1.55 var(--font);
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+h1,h2,h3,p,ul,dl,figure{margin:0}
+ul{padding:0;list-style:none}
+a{color:var(--brand)}
+b,strong{font-weight:650}
+code{font:var(--fs-2)/1.4 var(--mono);background:var(--surface-3);padding:1px 6px;
+  border-radius:6px;color:var(--fg-2)}
+.wrap{max-width:1240px;margin:0 auto;padding:0 var(--sp-5)}
+:focus-visible{outline:2px solid var(--brand);outline-offset:2px;border-radius:4px}
+.skip{position:absolute;left:-9999px;top:8px;z-index:60;background:var(--surface);
+  color:var(--fg);padding:10px 16px;border-radius:var(--r-1);box-shadow:var(--sh-2)}
+.skip:focus{left:16px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);
+  white-space:nowrap}
+.muted{color:var(--muted)}
+.num{font-variant-numeric:tabular-nums}
+
+/* ==== app bar =========================================================== */
+.appbar{position:sticky;top:0;z-index:40;background:var(--surface);
+  border-bottom:1px solid var(--line)}
+.appbar .row{display:flex;align-items:center;gap:var(--sp-4);height:60px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:680;font-size:var(--fs-5);
+  letter-spacing:-.01em;color:var(--fg);white-space:nowrap}
+.brand .mark{width:28px;height:28px;flex:0 0 28px;border-radius:9px;color:#fff;
+  background:linear-gradient(140deg,var(--brand-2),var(--brand));display:grid;
+  place-items:center}
+.brand .sub{font-weight:500;font-size:var(--fs-2);color:var(--muted);
+  border-left:1px solid var(--line-2);padding-left:10px}
+.appnav{display:flex;gap:2px;margin:0 auto}
+.appnav a{padding:7px 12px;border-radius:var(--r-1);color:var(--muted);
+  text-decoration:none;font-size:var(--fs-3);font-weight:560;
+  transition:background var(--dur-1) var(--ease),color var(--dur-1) var(--ease)}
+.appnav a:hover{background:var(--surface-3);color:var(--fg)}
+.bar-end{display:flex;align-items:center;gap:var(--sp-2)}
+
+/* ==== primitives ======================================================== */
+.btn{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 12px;
+  border:1px solid var(--line-2);border-radius:var(--r-1);background:var(--surface);
+  color:var(--fg-2);font:560 var(--fs-3)/1 var(--font);cursor:pointer;
+  transition:background var(--dur-1) var(--ease),color var(--dur-1) var(--ease),
+    transform var(--dur-1) var(--ease)}
+.btn:hover{background:var(--surface-3);color:var(--fg)}
+.btn:active{transform:translateY(1px)}
+.btn.icon{width:34px;padding:0;justify-content:center}
+.field{display:inline-flex;align-items:center;gap:8px;font-size:var(--fs-3);
+  color:var(--muted);font-weight:560}
+select{font:var(--fs-3)/1 var(--font);color:var(--fg);background:var(--surface);
+  border:1px solid var(--line-2);border-radius:var(--r-1);padding:0 28px 0 10px;
+  height:34px;appearance:none;cursor:pointer;
+  background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),
+    linear-gradient(135deg,var(--muted) 50%,transparent 50%);
+  background-position:calc(100% - 15px) 15px,calc(100% - 10px) 15px;
+  background-size:5px 5px,5px 5px;background-repeat:no-repeat;
+  transition:border-color var(--dur-1) var(--ease)}
+select:hover{border-color:var(--muted-2)}
+.switch{display:inline-flex;align-items:center;gap:8px;font-size:var(--fs-3);
+  color:var(--muted);font-weight:560;cursor:pointer;user-select:none}
+.switch input{width:34px;height:20px;margin:0;appearance:none;cursor:pointer;
+  background:var(--line-2);border-radius:var(--r-pill);position:relative;
+  transition:background var(--dur-2) var(--ease)}
+.switch input:before{content:"";position:absolute;top:2px;left:2px;width:16px;
+  height:16px;border-radius:50%;background:#fff;box-shadow:var(--sh-1);
+  transition:transform var(--dur-2) var(--ease)}
+.switch input:checked{background:var(--brand)}
+.switch input:checked:before{transform:translateX(14px)}
+.pill{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 10px;
+  border-radius:var(--r-pill);font-size:var(--fs-1);font-weight:650;
+  letter-spacing:.02em;text-transform:uppercase;background:var(--surface-3);
+  color:var(--muted);white-space:nowrap}
+.pill .dot{width:7px;height:7px;border-radius:50%;background:currentColor}
+.pill.live{background:var(--good-soft);color:var(--good-ink)}
+.pill.live .dot{animation:pulse 2.4s var(--ease) infinite}
+.pill.warn{background:var(--warn-soft);color:var(--warn-ink)}
+.pill.info{background:var(--brand-soft);color:var(--brand)}
+.chip{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;
+  border-radius:var(--r-1);background:var(--surface-3);color:var(--fg-2);
+  font-size:var(--fs-2);font-weight:560;max-width:280px;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+
+/* ==== layout ============================================================ */
+main{padding:var(--sp-6) 0 var(--sp-7)}
+.page-head{display:flex;flex-wrap:wrap;gap:var(--sp-3) var(--sp-5);
+  align-items:flex-end;justify-content:space-between;margin-bottom:var(--sp-5)}
+h1{font-size:var(--fs-7);font-weight:680;letter-spacing:-.02em;line-height:1.2}
+.page-head p{color:var(--muted);font-size:var(--fs-3);margin-top:2px}
+.status{display:flex;gap:var(--sp-2);align-items:center;flex-wrap:wrap}
+section{margin-top:var(--sp-6);scroll-margin-top:76px}
+.sec-head{display:flex;align-items:baseline;gap:var(--sp-3);flex-wrap:wrap;
+  margin-bottom:var(--sp-3)}
+h2{font-size:var(--fs-5);font-weight:660;letter-spacing:-.01em}
+.sec-head .hint{font-size:var(--fs-2);color:var(--muted)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-3);
+  padding:var(--sp-5);box-shadow:var(--sh-1);min-width:0;
+  transition:box-shadow var(--dur-2) var(--ease)}
+.card:hover{box-shadow:var(--sh-2)}
+.card h3{font-size:var(--fs-4);font-weight:640;letter-spacing:-.01em}
+.card .sub{font-size:var(--fs-2);color:var(--muted);margin-top:2px}
+.card-head{display:flex;justify-content:space-between;align-items:flex-start;
+  gap:var(--sp-3);margin-bottom:var(--sp-4)}
+.grid{display:grid;gap:var(--sp-4)}
+.g-5{grid-template-columns:repeat(5,minmax(0,1fr))}
+.g-4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.g-2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.g-23{grid-template-columns:minmax(0,3fr) minmax(0,2fr)}
+
+/* ==== toolbar =========================================================== */
+.toolbar{display:flex;flex-wrap:wrap;gap:var(--sp-3) var(--sp-4);align-items:center;
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--r-2);
+  padding:var(--sp-3) var(--sp-4);box-shadow:var(--sh-1);margin-bottom:var(--sp-4)}
+.toolbar .spacer{flex:1 1 auto}
+.toolbar .meta{font-size:var(--fs-2);color:var(--muted);display:flex;
+  align-items:center;gap:8px}
+
+/* ==== hero + gauge ====================================================== */
+.hero{grid-column:span 3;border-radius:var(--r-3);padding:var(--sp-5) var(--sp-6);
+  background:linear-gradient(135deg,var(--brand-3),var(--brand));color:#fff;
+  display:flex;flex-direction:column;justify-content:center;position:relative;
+  overflow:hidden;box-shadow:var(--sh-1)}
+.hero:after{content:"";position:absolute;right:-70px;top:-90px;width:280px;
+  height:280px;border-radius:50%;background:rgba(255,255,255,.07)}
+.hero-label{font-size:var(--fs-2);text-transform:uppercase;letter-spacing:.1em;
+  font-weight:650;opacity:.85}
+.hero-value{font-size:var(--fs-8);font-weight:700;line-height:1.1;
+  letter-spacing:-.03em;margin:6px 0 4px}
+.hero-sub{font-size:var(--fs-4);opacity:.94}
+.hero-foot{margin-top:var(--sp-4);font-size:var(--fs-2);opacity:.82;display:flex;
+  gap:var(--sp-3);flex-wrap:wrap;align-items:center;position:relative}
+.gauge-card{grid-column:span 2;display:flex;flex-direction:column;
+  justify-content:center}
+
+/* ==== stat tiles ======================================================== */
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-2);
+  padding:var(--sp-4);box-shadow:var(--sh-1);min-width:0;
+  transition:transform var(--dur-2) var(--ease),box-shadow var(--dur-2) var(--ease)}
+.stat:hover{transform:translateY(-1px);box-shadow:var(--sh-2)}
+.stat .k{font-size:var(--fs-2);color:var(--muted);font-weight:600;display:flex;
+  align-items:center;gap:6px}
+.stat .v{font-size:var(--fs-7);font-weight:680;letter-spacing:-.02em;line-height:1.25;
+  margin-top:2px;overflow-wrap:anywhere}
+.stat.sm .v{font-size:var(--fs-6)}
+.stat .n{font-size:var(--fs-2);color:var(--muted);margin-top:2px}
+.stat .spark{margin-top:var(--sp-2)}
+.swatch{width:9px;height:9px;border-radius:3px;flex:0 0 9px;display:inline-block}
+
+/* ==== charts ============================================================ */
+.chart{width:100%;overflow-x:auto}
+.chart svg{display:block;width:100%;height:auto}
+.chart.center svg{margin-left:auto;margin-right:auto}
+.legend{display:flex;flex-wrap:wrap;gap:var(--sp-2) var(--sp-4);
+  margin-bottom:var(--sp-3)}
+.legend .item{display:inline-flex;align-items:center;gap:7px;font-size:var(--fs-2);
+  color:var(--muted);font-weight:560}
+.legend .key{width:14px;height:4px;border-radius:2px;display:inline-block}
+.donut-wrap{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+  gap:var(--sp-4);align-items:center}
+.klist{display:flex;flex-direction:column;gap:7px;font-size:var(--fs-3)}
+.klist .row{display:flex;align-items:center;gap:8px}
+.klist .nm{flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.klist .vl{color:var(--muted);font-variant-numeric:tabular-nums}
+
+/* ==== tables ============================================================ */
+.table-wrap{width:100%;overflow-x:auto;border:1px solid var(--line);
+  border-radius:var(--r-2)}
+table{border-collapse:collapse;width:100%;font-size:var(--fs-3)}
+caption{text-align:left;font-size:var(--fs-2);color:var(--muted);
+  padding:0 0 var(--sp-2)}
+th,td{text-align:left;padding:9px 14px;border-bottom:1px solid var(--line);
+  white-space:nowrap}
+thead th{background:var(--surface-2);color:var(--muted);font-size:var(--fs-2);
+  font-weight:640;text-transform:uppercase;letter-spacing:.04em}
+tbody tr:last-child td{border-bottom:0}
+tbody tr{transition:background var(--dur-1) var(--ease)}
+tbody tr:hover{background:var(--surface-2)}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+tr.is-sel td{background:var(--brand-soft)}
+
+/* ==== states ============================================================ */
+.empty{padding:var(--sp-6) var(--sp-4);text-align:center;color:var(--muted);
+  border:1px dashed var(--line-2);border-radius:var(--r-2);background:var(--surface-2)}
+.empty .t{font-weight:620;color:var(--fg-2);font-size:var(--fs-4)}
+.empty .m{font-size:var(--fs-3);margin-top:4px}
+.banner{display:flex;gap:var(--sp-3);align-items:flex-start;padding:var(--sp-4);
+  border-radius:var(--r-2);font-size:var(--fs-3);margin-bottom:var(--sp-4)}
+.banner.info{background:var(--brand-soft);color:var(--fg-2)}
+.banner.warn{background:var(--warn-soft);color:var(--warn-ink)}
+.skel{background:linear-gradient(90deg,var(--surface-3) 25%,var(--overlay) 37%,
+  var(--surface-3) 63%);background-size:400% 100%;border-radius:var(--r-1);
+  animation:shimmer 1.4s var(--ease) infinite}
+.skel.line{height:12px;margin:6px 0}
+.skel.chart{height:240px}
+@keyframes shimmer{0%{background-position:100% 50%}100%{background-position:0 50%}}
+details{background:var(--surface);border:1px solid var(--line);
+  border-radius:var(--r-3);padding:var(--sp-4) var(--sp-5);box-shadow:var(--sh-1)}
+summary{cursor:pointer;font-weight:620;font-size:var(--fs-4);list-style:none;
+  display:flex;align-items:center;gap:8px}
+summary::-webkit-details-marker{display:none}
+summary:before{content:"";width:0;height:0;border:5px solid transparent;
+  border-left-color:var(--muted-2);transition:transform var(--dur-2) var(--ease)}
+details[open] summary:before{transform:rotate(90deg) translateX(-2px)}
+details .body{margin-top:var(--sp-4)}
+footer{margin-top:var(--sp-6);padding:var(--sp-5) 0;border-top:1px solid var(--line);
+  color:var(--muted);font-size:var(--fs-2);display:flex;gap:var(--sp-4);
+  flex-wrap:wrap;justify-content:space-between}
+
+/* ==== responsive ======================================================== */
+@media (max-width:1080px){
+  .g-5{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .g-23{grid-template-columns:minmax(0,1fr)}
+  .hero,.gauge-card{grid-column:span 3}
+  .appnav{display:none}
+}
+@media (max-width:760px){
+  .wrap{padding:0 var(--sp-4)}
+  :root{--fs-7:24px;--fs-8:38px}
+  .grid{gap:var(--sp-3)}
+  .g-5,.g-4,.g-2{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .hero,.gauge-card{grid-column:span 2}
+  .card{padding:var(--sp-4)}
+  .donut-wrap{grid-template-columns:minmax(0,1fr)}
+  .brand .sub{display:none}
+}
+@media (max-width:460px){
+  /* Stat tiles stay two-up — a nine-tile single column is a scroll, not a
+     scorecard. Only the hero and the gauge take the full width. */
+  .g-2{grid-template-columns:minmax(0,1fr)}
+  .hero,.gauge-card{grid-column:span 2}
+  .hero{padding:var(--sp-4)}
+  .stat .v{font-size:var(--fs-6)}
+}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *{animation-duration:.001ms !important;animation-iteration-count:1 !important;
+    transition-duration:.001ms !important}
+}
+@media print{
+  .appbar,.toolbar,.skip,.no-print{display:none !important}
+  body{background:#fff}
+  .card,.stat,.table-wrap{break-inside:avoid;box-shadow:none}
+  section{margin-top:18px}
+}
+</style></head><body>
+<a class="skip" href="#main">Skip to dashboard</a>
+<header class="appbar no-print">
+  <div class="wrap row">
+    <div class="brand">
+      <span class="mark" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 4.2h12M2 8h8M2 11.8h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12.6" cy="11.4" r="2.2" stroke="currentColor" stroke-width="1.6"/></svg></span>
+      ContextIQ<span class="sub">Token intelligence</span>
+    </div>
+    <nav class="appnav" aria-label="Dashboard sections">
+      <a href="#s-overview">Overview</a><a href="#s-savings">Savings</a>
+      <a href="#s-ops">Operations</a><a href="#s-cost">Cost by model</a>
+      <a href="#s-workspace">Workspace</a><a href="#s-graph">Code graph</a>
+      <a href="#s-log">Activity log</a>
+    </nav>
+    <div class="bar-end">
+      <span class="chip" title="Workspace this report covers">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M2 4.5A1.5 1.5 0 0 1 3.5 3h3l1.2 1.6h4.8A1.5 1.5 0 0 1 14 6.1v5.4A1.5 1.5 0 0 1 12.5 13h-9A1.5 1.5 0 0 1 2 11.5v-7Z" stroke="currentColor" stroke-width="1.4"/></svg>
+        <span id="ws-chip">workspace</span></span>
+      <button type="button" class="btn icon" id="btn-theme"
+              aria-label="Colour theme">◐</button>
+    </div>
+  </div>
+</header>
+
+<main id="main" class="wrap">
+  <div class="page-head">
+    <div>
+      <h1>Token usage &amp; savings</h1>
+      <p id="meta"><span class="skel line" style="width:280px;display:inline-block"></span></p>
+    </div>
+    <div class="status">
+      <span class="pill info">local only</span>
+      <span class="pill">read-only</span>
+    </div>
+  </div>
+
+  <div class="toolbar no-print" role="group" aria-label="Report filters">
+    <span class="field"><label for="sel-model">Pricing model</label>
+      <select id="sel-model" aria-describedby="unit-price"></select></span>
+    <span class="muted" id="unit-price" style="font-size:12px"></span>
+    <span class="field"><label for="sel-range">Date range</label>
+      <select id="sel-range">
+        <option value="all">All time</option>
+        <option value="7">Last 7 days</option>
+        <option value="30">Last 30 days</option>
+        <option value="90">Last 90 days</option>
+      </select></span>
+    <span class="spacer"></span>
+    <label class="switch" for="chk-auto"><input type="checkbox" id="chk-auto" checked>
+      Auto-refresh</label>
+    <span class="meta" id="countdown" role="status" aria-live="polite"></span>
+    <button type="button" class="btn" id="btn-refresh">Refresh now</button>
+  </div>
+  <p class="muted" id="range-note" style="font-size:12px;margin-bottom:16px"
+     role="status" aria-live="polite"></p>
+  <div id="onboard"></div>
+
+  <section id="s-overview" aria-labelledby="h-overview">
+    <div class="sec-head"><h2 id="h-overview">Overview</h2>
+      <span class="hint">Projected at list input-token prices — indicative, not billing.</span></div>
+    <div class="grid g-5">
+      <div class="hero">
+        <div class="hero-label">Estimated cost avoided</div>
+        <div class="hero-value" id="hero-value">—</div>
+        <div class="hero-sub" id="hero-sub"></div>
+        <div class="hero-foot"><span id="hero-note"></span></div>
+      </div>
+      <div class="card gauge-card">
+        <div class="card-head"><div><h3>Prompt reduction</h3>
+          <div class="sub">Share of baseline tokens never sent</div></div></div>
+        <div class="chart center" id="c-gauge"><div class="skel chart" style="height:150px"></div></div>
+      </div>
+    </div>
+    <div class="grid g-5" style="margin-top:16px">
+      <div class="stat"><div class="k">Tokens saved</div>
+        <div class="v num" id="m-saved">—</div>
+        <div class="n" id="k-saved-n"></div>
+        <div class="spark" id="k-spark"></div></div>
+      <div class="stat"><div class="k">Tokens sent (consumed)</div>
+        <div class="v num" id="m-sent">—</div><div class="n" id="k-sent-n"></div></div>
+      <div class="stat"><div class="k">Cost of tokens sent</div>
+        <div class="v num" id="m-spend">—</div><div class="n" id="k-spend-n"></div></div>
+      <div class="stat"><div class="k">Reduction</div>
+        <div class="v num" id="m-red">—</div><div class="n" id="k-red-n"></div></div>
+      <div class="stat"><div class="k">Runs</div>
+        <div class="v num" id="m-runs">—</div><div class="n" id="k-runs-n"></div></div>
+    </div>
+    <div class="grid g-4" style="margin-top:16px">
+      <div class="stat sm"><div class="k">Baseline tokens</div>
+        <div class="v num" id="m-baseline">—</div>
+        <div class="n">what whole-file reads would have cost</div></div>
+      <div class="stat sm"><div class="k">Avg. saved per run</div>
+        <div class="v num" id="m-avg">—</div>
+        <div class="n">tokens avoided per recorded call</div></div>
+      <div class="stat sm"><div class="k">Context leverage</div>
+        <div class="v num" id="m-leverage">—</div>
+        <div class="n">baseline ÷ tokens actually sent</div></div>
+      <div class="stat sm"><div class="k">Files covered</div>
+        <div class="v num" id="m-files">—</div>
+        <div class="n">files represented in those packs</div></div>
+    </div>
+  </section>
+
+  <section id="s-savings" aria-labelledby="h-savings">
+    <div class="sec-head"><h2 id="h-savings">Savings</h2>
+      <span class="hint">Every figure comes from the local ledger — nothing is estimated except the $ projection.</span></div>
+    <div class="grid g-2">
+      <div class="card">
+        <div class="card-head"><div><h3>Baseline → avoided → sent</h3>
+          <div class="sub">Where the tokens went, for the selected window</div></div></div>
+        <div class="legend" aria-hidden="true">
+          <span class="item"><i class="key" style="background:var(--s-base)"></i>Baseline</span>
+          <span class="item"><i class="key" style="background:var(--s-saved)"></i>Avoided</span>
+          <span class="item"><i class="key" style="background:var(--s-sent)"></i>Sent</span>
+        </div>
+        <div class="chart" id="c-waterfall"><div class="skel chart"></div></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><div><h3>Avoided &amp; sent over time</h3>
+          <div class="sub">Daily totals, stacked</div></div></div>
+        <div class="legend" aria-hidden="true">
+          <span class="item"><i class="key" style="background:var(--s-saved)"></i>Avoided</span>
+          <span class="item"><i class="key" style="background:var(--s-sent)"></i>Sent</span>
+        </div>
+        <div class="chart" id="c-area"><div class="skel chart"></div></div>
+      </div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <div class="card-head"><div><h3>Activity</h3>
+        <div class="sub">Tokens avoided per day, last 26 weeks</div></div></div>
+      <div class="chart center" id="c-heat"><div class="skel chart" style="height:160px"></div></div>
+    </div>
+  </section>
+
+  <section id="s-ops" aria-labelledby="h-ops">
+    <div class="sec-head"><h2 id="h-ops">Operations</h2>
+      <span class="hint">Which retrieval calls produce the savings</span></div>
+    <div class="grid g-23">
+      <div class="card">
+        <div class="card-head"><div><h3>Tokens avoided by operation</h3>
+          <div class="sub">Top 8, with share of total savings</div></div></div>
+        <div class="chart" id="c-ops"><div class="skel chart" style="height:200px"></div></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><div><h3>Share of runs</h3>
+          <div class="sub">How often each operation is used</div></div></div>
+        <div id="c-mix"><div class="skel chart" style="height:200px"></div></div>
+      </div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <div class="card-head"><div><h3>Operation detail</h3>
+        <div class="sub">Totals per operation for the selected window</div></div></div>
+      <div id="c-optable"><div class="skel line" style="width:100%"></div></div>
+    </div>
+  </section>
+
+  <section id="s-cost" aria-labelledby="h-cost">
+    <div class="sec-head"><h2 id="h-cost">Cost by model</h2>
+      <span class="hint">Same token counts, priced against every model in the table</span></div>
+    <div class="card">
+      <div class="card-head"><div><h3>Cost avoided per pricing model</h3>
+        <div class="sub">Saved tokens × that model's list input price</div></div></div>
+      <div class="chart center" id="c-models"><div class="skel chart" style="height:220px"></div></div>
+      <div style="margin-top:16px" id="c-modeltable"></div>
+      <p class="muted" style="font-size:12px;margin-top:12px">
+        Input-token list prices only. Output tokens, caching, batching and
+        negotiated rates are not modelled, so treat these as directional.</p>
+    </div>
+  </section>
+
+  <section id="s-workspace" aria-labelledby="h-ws">
+    <div class="sec-head"><h2 id="h-ws">Workspace</h2>
+      <span class="hint">What the local code graph covers</span></div>
+    <div id="c-ws"><div class="skel chart" style="height:110px"></div></div>
+    <div class="card" style="margin-top:16px">
+      <div class="card-head"><div><h3>Indexed files by language</h3>
+        <div class="sub">Top 8 languages in the graph</div></div></div>
+      <div class="chart center" id="c-langs"><div class="skel chart" style="height:200px"></div></div>
+    </div>
+  </section>
+
+  <section id="s-graph" aria-labelledby="h-graph">
+    <div class="sec-head"><h2 id="h-graph">Code graph</h2>
+      <span class="hint">How this workspace is wired together</span></div>
+    <div class="card">
+      <div class="card-head">
+        <div><h3>Dependency graph</h3>
+          <div class="sub" id="graph-sub"></div></div>
+        <span class="field no-print"><label for="sel-glevel">Level</label>
+          <select id="sel-glevel">
+            <option value="module">Modules</option>
+            <option value="file">Files</option>
+          </select></span>
+      </div>
+      <div class="legend" id="graph-legend" aria-hidden="true"></div>
+      <div class="chart center" id="c-graph">
+        <div class="skel chart" style="height:240px"></div></div>
+      <p class="muted" id="graph-note" style="font-size:12px;margin-top:12px"></p>
+      <details style="margin-top:12px">
+        <summary>Nodes as a table</summary>
+        <div class="body" id="c-graphtable"></div>
+      </details>
+    </div>
+  </section>
+
+  <section id="s-log" aria-labelledby="h-log">
+    <div class="sec-head"><h2 id="h-log">Activity log</h2>
+      <span class="hint">Raw ledger records, newest first</span></div>
+    <details>
+      <summary>Raw ledger records</summary>
+      <div class="body" id="c-rows"></div>
+    </details>
+  </section>
+
+  <footer>
+    <div>Source <code>.context/gain.ndjson</code> · <span id="foot-privacy">counts
+      only, never file paths or queries</span> · stays on this machine.</div>
+    <div class="num">Generated <span id="foot-gen">—</span> · <span id="foot-ver"></span></div>
+  </footer>
+</main>
+<script type="application/json" id="ciq-data">{"version": 2, "workspace": "TIBCOAnalyzer", "generated_at": "2026-08-16 21:42", "model": "claude-sonnet", "prices": {"claude-opus": 15.0, "claude-sonnet": 3.0, "claude-haiku": 0.8, "gpt-4o": 2.5, "gpt-4o-mini": 0.15, "gpt-4.1": 2.0, "gemini-1.5-pro": 1.25, "gemini-1.5-flash": 0.075, "llama-3.1-405b": 3.0, "llama-3.1-70b": 0.6, "llama-3.1-8b": 0.1}, "prices_io": {"claude-fable-5": {"input": 10.0, "output": 50.0}, "claude-opus-4-8": {"input": 5.0, "output": 25.0}, "claude-opus-4-7": {"input": 5.0, "output": 25.0}, "claude-opus-4-6": {"input": 5.0, "output": 25.0}, "claude-sonnet-5": {"input": 3.0, "output": 15.0}, "claude-sonnet-4-6": {"input": 3.0, "output": 15.0}, "claude-haiku-4-5": {"input": 1.0, "output": 5.0}, "claude-opus": {"input": 5.0, "output": 25.0}, "claude-sonnet": {"input": 3.0, "output": 15.0}, "claude-haiku": {"input": 1.0, "output": 5.0}, "gpt-4o": {"input": 2.5, "output": 10.0}, "gpt-4o-mini": {"input": 0.15, "output": 0.6}, "gpt-4.1": {"input": 2.0, "output": 8.0}, "gemini-1.5-pro": {"input": 1.25, "output": 5.0}, "gemini-1.5-flash": {"input": 0.075, "output": 0.3}, "llama-3.1-405b": {"input": 3.0, "output": 3.0}, "llama-3.1-70b": {"input": 0.6, "output": 0.6}, "llama-3.1-8b": {"input": 0.1, "output": 0.1}}, "totals": {"runs": 0, "saved": 0, "baseline": 0, "final": 0, "reduction_pct": 0.0, "saved_usd": 0.0, "files": 0}, "by_op": [], "daily": [], "weekly": [], "monthly": [], "ledger": {"first_ts": 0.0, "last_ts": 0.0, "active_days": 0}, "workspace_stats": {"files": 1, "symbols": 1246, "chunks": 226, "edges": 1503, "summaries": 104, "indexed_tokens": 211178, "db_bytes": 5492736, "languages": [{"language": "python", "files": 70, "tokens": 137946}, {"language": "markdown", "files": 32, "tokens": 71453}, {"language": "yaml", "files": 1, "tokens": 1481}, {"language": "toml", "files": 1, "tokens": 298}]}, "graph": {}, "rows": [], "rows_capped": false}</script>
+<script>
+/* ContextIQ report view layer.
+   Plain ES5, no dependencies, no globals: the page must work from file:// in
+   any client, so every dependency is inlined and every DOM write goes through
+   set()/put(), which no-op when a container is absent. */
+(function(){
+  var RANGES=['all','7','30','90'];
+  var GLEVELS=['module','file'];
+  var C_SENT='var(--s-sent)', C_SAVED='var(--s-saved)', C_BASE='var(--s-base)';
+  var CAT=[C_SENT,C_SAVED,'var(--s-c3)','var(--s-c4)','var(--s-c5)',C_BASE];
+  var SEQ=['var(--seq-0)','var(--seq-1)','var(--seq-2)','var(--seq-3)',
+           'var(--seq-4)','var(--seq-5)'];
+  var GRID='var(--grid)', MUT='var(--muted)', SURF='var(--surface)';
+  var THEMES=['auto','light','dark'];
+  var MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  var state={data:null,model:null,range:'all',theme:'auto',live:false,auto:true,
+             sig:null,left:0,err:false,glevel:'module'};
+  var tick=null;
+
+  /* ---------- dom + formatting ------------------------------------------ */
+  function el(id){return document.getElementById(id);}
+  function set(id,t){var n=el(id); if(n)n.textContent=t; return n;}
+  function put(id,h){var n=el(id); if(n)n.innerHTML=h; return n;}
+  function on(id,ev,fn){var n=el(id);
+    if(n&&n.addEventListener)n.addEventListener(ev,fn); return n;}
+  function esc(s){return String(s).replace(/[&<>"]/g,function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+  function fmt(n){n=Number(n)||0;var a=Math.abs(n);
+    if(a>=1e9)return (n/1e9).toFixed(1).replace(/\.0$/,'')+'B';
+    if(a>=1e6)return (n/1e6).toFixed(1).replace(/\.0$/,'')+'M';
+    if(a>=1e3)return (n/1e3).toFixed(1).replace(/\.0$/,'')+'K';
+    return String(Math.round(n));}
+  function full(n){return (Number(n)||0).toLocaleString();}
+  // Adaptive precision: money reads normally at cent scale and above, and only
+  // grows decimals below that — otherwise a young ledger (or a cheap model)
+  // collapses every figure to "$0.00" and switching model looks like a no-op.
+  // Under $0.10 we keep three significant digits, so two models whose prices
+  // differ stay visibly different.
+  function usd(n){
+    n=Number(n)||0;
+    var a=Math.abs(n), d=2;
+    if(a>0&&a<0.1)d=Math.min(8,Math.max(3,2-Math.floor(Math.log(a)/Math.LN10)));
+    return '$'+n.toLocaleString(undefined,
+      {minimumFractionDigits:d,maximumFractionDigits:d});
+  }
+  function pct(part,whole){return whole?Math.round(part/whole*1000)/10:0;}
+  function priceOf(){
+    var p=state.data.prices[state.model];
+    return p===undefined?3.0:p;
+  }
+  function priceIo(m){
+    var t=state.data.prices_io||{};
+    return t[m]||{input:(state.data.prices||{})[m],output:null};
+  }
+  function priceLabel(){
+    var p=priceOf();
+    return '@ $'+(p<1?p.toFixed(3):p.toFixed(2))+' / 1M tokens';
+  }
+  function rangeLabel(){
+    return state.range==='all'?'all time':'last '+state.range+' days';
+  }
+
+  /* ---------- UI state in the URL hash ----------------------------------- */
+  // The static page can only pick up new data by reloading (file:// cannot
+  // fetch), so selections are round-tripped through location.hash to survive
+  // it. sessionStorage is not usable here: Chrome restricts it on file://.
+  function readHash(){
+    var out={};
+    (location.hash||'').replace(/^#/,'').split('&').forEach(function(kv){
+      var i=kv.indexOf('=');
+      if(i>0)out[decodeURIComponent(kv.slice(0,i))]=decodeURIComponent(kv.slice(i+1));
+    });
+    return out;
+  }
+  function writeHash(){
+    var h='#model='+encodeURIComponent(state.model)+
+          '&range='+encodeURIComponent(state.range)+'&auto='+(state.auto?'1':'0')+
+          '&theme='+encodeURIComponent(state.theme)+
+          '&glevel='+encodeURIComponent(state.glevel);
+    try{history.replaceState(null,'',h);}catch(e){location.hash=h;}
+  }
+  // Cheap change-detector so a poll that returns identical data doesn't redraw.
+  function sig(d){
+    var t=d.totals||{};
+    return [d.generated_at,t.runs,t.saved,t.final,(d.rows||[]).length].join('|');
+  }
+
+  /* ---------- windowing --------------------------------------------------- */
+  function dkey(d){
+    var m=d.getMonth()+1, day=d.getDate();
+    return d.getFullYear()+'-'+(m<10?'0':'')+m+'-'+(day<10?'0':'')+day;
+  }
+  function windowStart(){                  // local midnight, N-1 days back
+    var d=new Date(); d.setHours(0,0,0,0);
+    d.setDate(d.getDate()-(parseInt(state.range,10)-1));
+    return d;
+  }
+  function series(){
+    var d=state.data.daily||[];
+    if(state.range==='all')return d;
+    var cut=dkey(windowStart());
+    return d.filter(function(x){return x.period>=cut;});
+  }
+  function totals(s){
+    if(state.range==='all')return state.data.totals||
+      {runs:0,saved:0,baseline:0,final:0,reduction_pct:0,files:0};
+    var t=s.reduce(function(a,x){return {runs:a.runs+(x.runs||0),
+      saved:a.saved+(x.saved||0),baseline:a.baseline+(x.baseline||0),
+      final:a.final+(x.final||0),files:a.files+(x.files||0)};},
+      {runs:0,saved:0,baseline:0,final:0,files:0});
+    t.reduction_pct=pct(t.saved,t.baseline);
+    return t;
+  }
+  function ops(){                          // per-operation rows for the window
+    if(state.range==='all')return state.data.by_op||[];
+    var cut=windowStart().getTime()/1000, agg={}, out=[];
+    (state.data.rows||[]).forEach(function(r){
+      if(Number(r.ts||0)<cut)return;
+      var k=r.op||'?', b=agg[k];
+      if(!b){b=agg[k]={op:k,runs:0,saved:0,baseline:0,final:0};out.push(b);}
+      b.runs++; b.saved+=Number(r.saved||0);
+      b.baseline+=Number(r.baseline_tokens||0);
+      b.final+=Number(r.final_tokens||0);
+    });
+    return out.sort(function(a,b){return b.saved-a.saved;});
+  }
+  function windowRows(){
+    if(state.range==='all')return state.data.rows||[];
+    var cut=windowStart().getTime()/1000;
+    return (state.data.rows||[]).filter(function(r){return Number(r.ts||0)>=cut;});
+  }
+  function savedUsd(saved){return saved/1e6*priceOf();}
+  function spendUsd(sent){return sent/1e6*priceOf();}
+
+  /* ---------- svg primitives ---------------------------------------------- */
+  // max-width = the viewBox width so labels never scale *up* past their design
+  // size in a wide card; min-width keeps them legible in a narrow one — the
+  // .chart container scrolls instead of shrinking the type to nothing.
+  function svg(w,h,label,inner){
+    return '<svg viewBox="0 0 '+w+' '+h+'" width="100%" height="'+h+'" '+
+      'style="min-width:'+Math.min(w,430)+'px;max-width:'+w+'px" '+
+      'preserveAspectRatio="xMidYMid meet" role="img" aria-label="'+esc(label)+
+      '">'+inner+'</svg>';
+  }
+  function empty(title,msg){
+    return '<div class="empty"><div class="t">'+esc(title)+'</div>'+
+           '<div class="m">'+esc(msg)+'</div></div>';
+  }
+  function niceMax(v){
+    if(!(v>0))return 1;
+    var e=Math.pow(10,Math.floor(Math.log(v)/Math.LN10)), f=v/e;
+    return (f<=1?1:f<=2?2:f<=2.5?2.5:f<=5?5:10)*e;
+  }
+  function colTop(x,y,w,h,r){           // column: rounded cap, square baseline
+    if(h<=0.5)h=0.5;
+    r=Math.min(r,w/2,h);
+    return 'M'+x+','+(y+h).toFixed(1)+'V'+(y+r).toFixed(1)+'Q'+x+','+y.toFixed(1)+
+      ' '+(x+r)+','+y.toFixed(1)+'H'+(x+w-r)+'Q'+(x+w)+','+y.toFixed(1)+' '+
+      (x+w)+','+(y+r).toFixed(1)+'V'+(y+h).toFixed(1)+'Z';
+  }
+  function barEnd(x,y,w,h,r){           // horizontal bar: rounded data end
+    if(w<=0.5)w=0.5;
+    r=Math.min(r,h/2,w);
+    return 'M'+x+','+y+'H'+(x+w-r).toFixed(1)+'Q'+(x+w).toFixed(1)+','+y+' '+
+      (x+w).toFixed(1)+','+(y+r)+'V'+(y+h-r)+'Q'+(x+w).toFixed(1)+','+(y+h)+' '+
+      (x+w-r).toFixed(1)+','+(y+h)+'H'+x+'Z';
+  }
+  function gridY(max,x0,x1,top,bot,steps){
+    var out='';
+    for(var i=0;i<=steps;i++){
+      var y=bot-(bot-top)*(i/steps);
+      out+='<line x1="'+x0+'" y1="'+y.toFixed(1)+'" x2="'+x1+'" y2="'+y.toFixed(1)+
+        '" stroke="'+GRID+'" stroke-width="1"/>'+
+        '<text x="'+(x0-8)+'" y="'+(y+3.5).toFixed(1)+'" text-anchor="end" '+
+        'font-size="10" fill="'+MUT+'">'+fmt(max*i/steps)+'</text>';
+    }
+    return out;
+  }
+  function tip(text){return '<title>'+esc(text)+'</title>';}
+
+  /* ---------- charts ------------------------------------------------------ */
+  function sparkline(vals){
+    if(!vals.length)return '';
+    var w=150,h=30,max=Math.max.apply(null,vals.concat([1])),n=vals.length,p='';
+    function x(i){return n<2?w/2:i*(w/(n-1));}
+    function y(v){return h-3-(v/max)*(h-8);}
+    for(var i=0;i<n;i++)p+=(i?' L':'M')+x(i).toFixed(1)+','+y(vals[i]).toFixed(1);
+    return svg(w,h,'Daily tokens avoided, last '+n+' day(s)',
+      '<path d="'+p+'" fill="none" stroke="'+C_SAVED+'" stroke-width="2" '+
+      'stroke-linejoin="round" stroke-linecap="round" opacity=".7"/>'+
+      '<circle cx="'+x(n-1).toFixed(1)+'" cy="'+y(vals[n-1]).toFixed(1)+
+      '" r="3.5" fill="'+C_SAVED+'" stroke="'+SURF+'" stroke-width="2"/>');
+  }
+
+  function waterfall(t){
+    if(!t.baseline)return empty('Nothing measured yet',
+      'Run a context, ask or measure call and the breakdown appears here.');
+    var w=560,h=300,x0=64,x1=548,top=30,bot=236,bw=30;
+    var max=niceMax(t.baseline), slot=(x1-x0)/3;
+    function y(v){return bot-(v/max)*(bot-top);}
+    function cx(i){return x0+slot*i+slot/2;}
+    var b=t.baseline, f=t.final, sv=t.saved;
+    var o=gridY(max,x0,x1,top,bot,4);
+    o+='<line x1="'+x0+'" y1="'+bot+'" x2="'+x1+'" y2="'+bot+
+      '" stroke="var(--line-2)" stroke-width="1"/>';
+    o+='<line x1="'+(cx(0)+bw/2)+'" y1="'+y(b).toFixed(1)+'" x2="'+(cx(1)-bw/2)+
+      '" y2="'+y(b).toFixed(1)+'" stroke="var(--line-2)" stroke-width="1"/>';
+    o+='<line x1="'+(cx(1)+bw/2)+'" y1="'+y(f).toFixed(1)+'" x2="'+(cx(2)-bw/2)+
+      '" y2="'+y(f).toFixed(1)+'" stroke="var(--line-2)" stroke-width="1"/>';
+    o+='<path d="'+colTop(cx(0)-bw/2,y(b),bw,bot-y(b),4)+'" fill="'+C_BASE+'">'+
+      tip('Baseline (same files read whole): '+full(b)+' tokens')+'</path>';
+    o+='<rect x="'+(cx(1)-bw/2)+'" y="'+y(b).toFixed(1)+'" width="'+bw+'" height="'+
+      Math.max(1,y(f)-y(b)).toFixed(1)+'" rx="3" fill="'+C_SAVED+'">'+
+      tip('Avoided by ContextIQ: '+full(sv)+' tokens ('+usd(savedUsd(sv))+')')+
+      '</rect>';
+    o+='<path d="'+colTop(cx(2)-bw/2,y(f),bw,bot-y(f),4)+'" fill="'+C_SENT+'">'+
+      tip('Actually sent: '+full(f)+' tokens ('+usd(spendUsd(f))+')')+'</path>';
+    [['Baseline',fmt(b),'100%',cx(0),y(b)],
+     ['Avoided','-'+fmt(sv),t.reduction_pct+'%',cx(1),y(b)],
+     ['Sent',fmt(f),(Math.round((100-t.reduction_pct)*10)/10)+'%',cx(2),y(f)]
+    ].forEach(function(r){
+      o+='<text x="'+r[3]+'" y="'+(r[4]-10).toFixed(1)+'" text-anchor="middle" '+
+        'font-size="13" font-weight="650" fill="currentColor">'+r[1]+'</text>'+
+        '<text x="'+r[3]+'" y="'+(bot+19)+'" text-anchor="middle" font-size="11" '+
+        'fill="currentColor">'+r[0]+'</text>'+
+        '<text x="'+r[3]+'" y="'+(bot+34)+'" text-anchor="middle" font-size="10" '+
+        'fill="'+MUT+'">'+r[2]+' of baseline</text>';
+    });
+    return svg(w,h,'Waterfall: baseline '+fmt(b)+' tokens, '+fmt(sv)+
+      ' avoided, '+fmt(f)+' sent',o);
+  }
+
+  function areaChart(s){
+    if(!s.length)return empty('No runs in this window',
+      'Widen the date range, or run a few context packs to fill the trend.');
+    var w=560,h=300,x0=64,x1=548,top=30,bot=236,n=s.length,peak=0,i;
+    s.forEach(function(d){peak=Math.max(peak,(d.final||0)+(d.saved||0));});
+    var max=niceMax(peak);
+    function y(v){return bot-(v/max)*(bot-top);}
+    var o=gridY(max,x0,x1,top,bot,4);
+    o+='<line x1="'+x0+'" y1="'+bot+'" x2="'+x1+'" y2="'+bot+
+      '" stroke="var(--line-2)" stroke-width="1"/>';
+    if(n<2){                               // one day of data: columns, not a band
+      var d0=s[0], c=(x0+x1)/2, bw=34;
+      o+='<path d="'+colTop(c-bw-4,y(d0.final||0),bw,bot-y(d0.final||0),4)+
+        '" fill="'+C_SENT+'">'+tip(d0.period+': '+full(d0.final)+' sent')+'</path>'+
+        '<path d="'+colTop(c+4,y(d0.saved||0),bw,bot-y(d0.saved||0),4)+'" fill="'+
+        C_SAVED+'">'+tip(d0.period+': '+full(d0.saved)+' avoided')+'</path>'+
+        '<text x="'+c+'" y="'+(bot+19)+'" text-anchor="middle" font-size="11" '+
+        'fill="'+MUT+'">'+esc(d0.period)+'</text>';
+      return svg(w,h,'Tokens sent and avoided on '+d0.period,o);
+    }
+    function x(i){return x0+i*((x1-x0)/(n-1));}
+    var sentTop='',sentBot='',savTop='',savBot='',lineSent='',lineSav='';
+    for(i=0;i<n;i++){
+      var f=s[i].final||0, tot=f+(s[i].saved||0);
+      sentTop+=x(i).toFixed(1)+','+y(f).toFixed(1)+' ';
+      savTop+=x(i).toFixed(1)+','+y(tot).toFixed(1)+' ';
+      lineSent+=(i?' L':'M')+x(i).toFixed(1)+','+y(f).toFixed(1);
+      lineSav+=(i?' L':'M')+x(i).toFixed(1)+','+y(tot).toFixed(1);
+    }
+    for(i=n-1;i>=0;i--){
+      sentBot+=x(i).toFixed(1)+','+bot+' ';
+      savBot+=x(i).toFixed(1)+','+(y(s[i].final||0)-2).toFixed(1)+' ';
+    }
+    o+='<polygon points="'+(savTop+savBot)+'" fill="'+C_SAVED+'" opacity=".16"/>'+
+      '<polygon points="'+(sentTop+sentBot)+'" fill="'+C_SENT+'" opacity=".16"/>'+
+      '<path d="'+lineSav+'" fill="none" stroke="'+C_SAVED+'" stroke-width="2" '+
+      'stroke-linejoin="round"/>'+
+      '<path d="'+lineSent+'" fill="none" stroke="'+C_SENT+'" stroke-width="2" '+
+      'stroke-linejoin="round"/>';
+    var lastTot=(s[n-1].final||0)+(s[n-1].saved||0);
+    o+='<circle cx="'+x(n-1).toFixed(1)+'" cy="'+y(lastTot).toFixed(1)+
+      '" r="4" fill="'+C_SAVED+'" stroke="'+SURF+'" stroke-width="2"/>'+
+      '<circle cx="'+x(n-1).toFixed(1)+'" cy="'+y(s[n-1].final||0).toFixed(1)+
+      '" r="4" fill="'+C_SENT+'" stroke="'+SURF+'" stroke-width="2"/>'+
+      '<text x="'+(x1-2)+'" y="'+(y(lastTot)-12).toFixed(1)+'" text-anchor="end" '+
+      'font-size="11" font-weight="620" fill="currentColor">'+fmt(lastTot)+
+      ' total</text>';
+    for(i=0;i<n;i++){                      // generous hover targets
+      var t2=(s[i].final||0)+(s[i].saved||0);
+      o+='<circle cx="'+x(i).toFixed(1)+'" cy="'+y(t2).toFixed(1)+'" r="10" '+
+        'fill="transparent">'+tip(s[i].period+' — avoided '+full(s[i].saved)+
+        ', sent '+full(s[i].final)+', '+(s[i].runs||0)+' run(s)')+'</circle>';
+    }
+    var mid=Math.floor((n-1)/2);
+    [[0,'start'],[mid,'middle'],[n-1,'end']].forEach(function(L,k){
+      if(k===1&&n<4)return;
+      o+='<text x="'+x(L[0]).toFixed(1)+'" y="'+(bot+19)+'" text-anchor="'+L[1]+
+        '" font-size="11" fill="'+MUT+'">'+esc(s[L[0]].period)+'</text>';
+    });
+    return svg(w,h,'Daily tokens avoided and sent over '+n+' days',o);
+  }
+
+  function opBars(rows){
+    if(!rows.length)return empty('No operations in this window',
+      'Every context, ask, measure, squeeze or dedupe call lands here.');
+    var top=rows.slice(0,8), total=0;
+    rows.forEach(function(o){total+=o.saved;});
+    var max=Math.max.apply(null,top.map(function(o){return o.saved;}).concat([1]));
+    var w=560,lw=104,right=170,rh=32,bt=14,h=top.length*rh+10,o='';
+    top.forEach(function(r,i){
+      var y=i*rh+8, bw=Math.max(2,(r.saved/max)*(w-lw-right));
+      o+='<text x="0" y="'+(y+bt-2)+'" font-size="12" fill="currentColor">'+
+        esc(String(r.op).slice(0,15))+'</text>'+
+        '<path d="'+barEnd(lw,y,bw,bt,4)+'" fill="'+C_SAVED+'">'+
+        tip(r.op+': '+full(r.saved)+' tokens avoided ('+usd(savedUsd(r.saved))+
+        ') over '+r.runs+' run(s)')+'</path>'+
+        '<text x="'+(lw+bw+8)+'" y="'+(y+bt-3)+'" font-size="11" fill="'+MUT+'">'+
+        fmt(r.saved)+' · '+usd(savedUsd(r.saved))+' · '+pct(r.saved,total)+
+        '%</text>';
+    });
+    return svg(w,h,'Tokens avoided by operation',o);
+  }
+
+  function donut(rows){
+    var runs=0;
+    rows.forEach(function(r){runs+=r.runs;});
+    if(!runs)return empty('No runs yet','Nothing to break down.');
+    var slice=rows.slice(0,5), rest=rows.slice(5), other=0;
+    rest.forEach(function(r){other+=r.runs;});
+    if(other)slice=slice.concat([{op:'other ('+rest.length+')',runs:other}]);
+    var w=240,h=240,cx=120,cy=118,r=94,ir=62,a=0,gap=slice.length>1?2:0,o='';
+    function pt(rad,deg){var t=(deg-90)*Math.PI/180;
+      return [(cx+rad*Math.cos(t)).toFixed(2),(cy+rad*Math.sin(t)).toFixed(2)];}
+    slice.forEach(function(s,i){
+      var span=s.runs/runs*360, a0=a+gap/2, a1=a+span-gap/2, col=CAT[i%CAT.length];
+      a+=span;
+      if(span>=359.5){
+        o+='<circle cx="'+cx+'" cy="'+cy+'" r="'+((r+ir)/2)+'" fill="none" '+
+          'stroke="'+col+'" stroke-width="'+(r-ir)+'">'+
+          tip(s.op+': '+s.runs+' run(s), 100%')+'</circle>';
+        return;
+      }
+      if(a1<=a0)return;
+      var p0=pt(r,a0),p1=pt(r,a1),q1=pt(ir,a1),q0=pt(ir,a0),la=(a1-a0)>180?1:0;
+      o+='<path d="M'+p0[0]+','+p0[1]+'A'+r+','+r+' 0 '+la+' 1 '+p1[0]+','+p1[1]+
+        'L'+q1[0]+','+q1[1]+'A'+ir+','+ir+' 0 '+la+' 0 '+q0[0]+','+q0[1]+'Z" fill="'+
+        col+'">'+tip(s.op+': '+s.runs+' run(s), '+pct(s.runs,runs)+'%')+'</path>';
+    });
+    o+='<text x="'+cx+'" y="'+(cy+4)+'" text-anchor="middle" font-size="30" '+
+      'font-weight="680" fill="currentColor">'+fmt(runs)+'</text>'+
+      '<text x="'+cx+'" y="'+(cy+24)+'" text-anchor="middle" font-size="11" '+
+      'fill="'+MUT+'">runs</text>';
+    var list='<ul class="klist">';
+    slice.forEach(function(s,i){
+      list+='<li class="row"><span class="swatch" style="background:'+
+        CAT[i%CAT.length]+'"></span><span class="nm">'+esc(s.op)+
+        '</span><span class="vl">'+full(s.runs)+' · '+pct(s.runs,runs)+
+        '%</span></li>';
+    });
+    return '<div class="donut-wrap"><div class="chart">'+
+      svg(w,h,'Share of runs by operation',o)+'</div>'+list+'</ul></div>';
+  }
+
+  function heatmap(s){
+    if(!s.length)return empty('No activity yet',
+      'Daily savings appear here once the ledger has entries.');
+    var by={};
+    s.forEach(function(d){by[d.period]={saved:d.saved||0,runs:d.runs||0};});
+    var WEEKS=26, cs=20, gp=4, left=36, top=30, vals=[], k;
+    for(k in by){if(by[k].saved>0)vals.push(by[k].saved);}
+    vals.sort(function(a,b){return a-b;});
+    var q=[0.2,0.4,0.6,0.8].map(function(p){
+      return vals.length?vals[Math.floor(p*(vals.length-1))]:0;});
+    function bucket(v){
+      if(!v)return 0;
+      if(!vals.length)return 3;
+      return v<=q[0]?1:v<=q[1]?2:v<=q[2]?3:v<=q[3]?4:5;
+    }
+    var today=new Date(); today.setHours(12,0,0,0);
+    var start=new Date(today);
+    start.setDate(today.getDate()-((WEEKS-1)*7+today.getDay()));
+    var w=left+WEEKS*(cs+gp)+8, h=top+7*(cs+gp)+32, o='', lastMonth=-1;
+    for(var i=0;i<WEEKS*7;i++){
+      var d=new Date(start); d.setDate(start.getDate()+i);
+      if(d>today)continue;
+      var col=Math.floor(i/7), row=i%7, key=dkey(d), cell=by[key];
+      var v=cell?cell.saved:0, x=left+col*(cs+gp), y=top+row*(cs+gp);
+      o+='<rect x="'+x+'" y="'+y+'" width="'+cs+'" height="'+cs+'" rx="3" fill="'+
+        SEQ[bucket(v)]+'">'+tip(key+(cell?(': '+full(v)+' tokens avoided · '+
+        cell.runs+' run(s)'):': no runs'))+'</rect>';
+      if(row===0&&d.getMonth()!==lastMonth&&d.getDate()<=7){
+        lastMonth=d.getMonth();
+        o+='<text x="'+x+'" y="'+(top-9)+'" font-size="10" fill="'+MUT+'">'+
+          MONTHS[d.getMonth()]+'</text>';
+      }
+    }
+    ['Mon','Wed','Fri'].forEach(function(lab,j){
+      o+='<text x="0" y="'+(top+(j*2+1)*(cs+gp)+cs-2)+'" font-size="10" fill="'+
+        MUT+'">'+lab+'</text>';
+    });
+    var lx=left, ly=h-15;
+    o+='<text x="'+lx+'" y="'+(ly+cs-3)+'" font-size="10" fill="'+MUT+
+      '">less</text>';
+    for(var b=0;b<6;b++){
+      o+='<rect x="'+(lx+30+b*(cs+gp))+'" y="'+ly+'" width="'+cs+'" height="'+cs+
+        '" rx="3" fill="'+SEQ[b]+'"/>';
+    }
+    o+='<text x="'+(lx+36+6*(cs+gp))+'" y="'+(ly+cs-3)+'" font-size="10" fill="'+
+      MUT+'">more</text>';
+    return svg(w,h,'Daily savings over the last '+WEEKS+' weeks',o);
+  }
+
+  function gauge(t){
+    var w=260,h=152,cx=130,cy=128,r=96,sw=18;
+    var val=Math.max(0,Math.min(100,Number(t.reduction_pct)||0)), frac=val/100;
+    function arc(f){
+      var ang=Math.PI*f;
+      return 'M'+(cx-r)+','+cy+' A'+r+','+r+' 0 '+(f>0.5?1:0)+' 1 '+
+        (cx-r*Math.cos(ang)).toFixed(2)+','+(cy-r*Math.sin(ang)).toFixed(2);
+    }
+    var o='<path d="'+arc(1)+'" fill="none" stroke="var(--track)" stroke-width="'+
+      sw+'" stroke-linecap="round"/>';
+    if(frac>0.004){
+      o+='<path d="'+arc(frac)+'" fill="none" stroke="'+C_SAVED+'" stroke-width="'+
+        sw+'" stroke-linecap="round">'+tip('Prompts are '+val+
+        '% smaller than the same files read whole')+'</path>';
+    }
+    o+='<text x="'+cx+'" y="'+(cy-18)+'" text-anchor="middle" font-size="40" '+
+      'font-weight="700" fill="currentColor">'+val+'%</text>'+
+      '<text x="'+cx+'" y="'+(cy+4)+'" text-anchor="middle" font-size="12" '+
+      'fill="'+MUT+'">of baseline avoided</text>'+
+      '<text x="'+(cx-r)+'" y="'+(cy+22)+'" text-anchor="middle" font-size="10" '+
+      'fill="'+MUT+'">0%</text>'+
+      '<text x="'+(cx+r)+'" y="'+(cy+22)+'" text-anchor="middle" font-size="10" '+
+      'fill="'+MUT+'">100%</text>';
+    return svg(w,h,'Prompt reduction gauge: '+val+
+      ' percent of baseline tokens avoided',o);
+  }
+
+  function modelNames(){
+    var names=Object.keys(state.data.prices||{});
+    names.sort(function(a,b){
+      return state.data.prices[b]-state.data.prices[a];});
+    return names;
+  }
+
+  function modelChart(t){
+    var names=modelNames();
+    if(!names.length||!t.saved)return empty('No pricing comparison yet',
+      'Once the ledger records savings, every priced model is compared here.');
+    var max=Math.max.apply(null,names.map(function(m){
+      return t.saved/1e6*state.data.prices[m];}).concat([1e-9]));
+    var w=940,lw=150,right=200,rh=28,bt=14,h=names.length*rh+10,o='';
+    names.forEach(function(m,i){
+      var v=t.saved/1e6*state.data.prices[m], sel=(m===state.model);
+      var y=i*rh+7, bw=Math.max(2,(v/max)*(w-lw-right));
+      if(sel)o+='<rect x="0" y="'+(y-4)+'" width="'+w+'" height="'+(rh-3)+
+        '" rx="6" fill="var(--brand-soft)"/>';
+      o+='<text x="6" y="'+(y+bt-2)+'" font-size="11.5" font-weight="'+
+        (sel?'660':'400')+'" fill="currentColor">'+esc(m)+'</text>'+
+        '<path d="'+barEnd(lw,y,bw,bt,4)+'" fill="'+C_SENT+'" opacity="'+
+        (sel?'1':'.6')+'">'+tip(m+': '+usd(v)+' avoided on '+full(t.saved)+
+        ' tokens at $'+state.data.prices[m]+' per 1M input tokens')+'</path>'+
+        '<text x="'+(lw+bw+8)+'" y="'+(y+bt-3)+'" font-size="11" fill="'+MUT+'">'+
+        usd(v)+(sel?' · selected':'')+'</text>';
+    });
+    return svg(w,h,'Cost avoided by pricing model',o);
+  }
+
+  function modelTable(t){
+    var names=modelNames();
+    if(!names.length)return '';
+    var o='<div class="table-wrap" tabindex="0" role="region" '+
+      'aria-label="Cost by pricing model"><table><caption class="sr">'+
+      'Projected cost avoided and estimated spend for every priced model'+
+      '</caption><thead><tr><th scope="col">Model</th>'+
+      '<th scope="col" class="n">Input $/1M</th>'+
+      '<th scope="col" class="n">Output $/1M</th>'+
+      '<th scope="col" class="n">Cost avoided</th>'+
+      '<th scope="col" class="n">Est. spend on sent</th>'+
+      '<th scope="col" class="n">Baseline cost</th></tr></thead><tbody>';
+    names.forEach(function(m){
+      var p=state.data.prices[m], io=priceIo(m);
+      o+='<tr'+(m===state.model?' class="is-sel"':'')+'><td>'+esc(m)+
+        (m===state.model?' <span class="pill info">selected</span>':'')+
+        '</td><td class="n">$'+(p<1?p.toFixed(3):p.toFixed(2))+'</td>'+
+        '<td class="n">'+(io.output==null?'—':'$'+Number(io.output).toFixed(2))+
+        '</td><td class="n">'+usd(t.saved/1e6*p)+'</td><td class="n">'+
+        usd(t.final/1e6*p)+'</td><td class="n">'+usd(t.baseline/1e6*p)+'</td></tr>';
+    });
+    return o+'</tbody></table></div>';
+  }
+
+  function opTable(rows,t){
+    if(!rows.length)return '';
+    var o='<div class="table-wrap" tabindex="0" role="region" '+
+      'aria-label="Savings by operation"><table><caption class="sr">'+
+      'Per-operation totals for the selected window</caption><thead><tr>'+
+      '<th scope="col">Operation</th><th scope="col" class="n">Runs</th>'+
+      '<th scope="col" class="n">Baseline</th><th scope="col" class="n">Sent</th>'+
+      '<th scope="col" class="n">Avoided</th>'+
+      '<th scope="col" class="n">Reduction</th><th scope="col" class="n">Share</th>'+
+      '<th scope="col" class="n">Cost avoided</th></tr></thead><tbody>';
+    rows.forEach(function(r){
+      o+='<tr><td>'+esc(r.op)+'</td><td class="n">'+full(r.runs)+
+        '</td><td class="n">'+full(r.baseline)+'</td><td class="n">'+full(r.final)+
+        '</td><td class="n">'+full(r.saved)+'</td><td class="n">'+
+        pct(r.saved,r.baseline)+'%</td><td class="n">'+pct(r.saved,t.saved)+
+        '%</td><td class="n">'+usd(savedUsd(r.saved))+'</td></tr>';
+    });
+    return o+'</tbody></table></div>';
+  }
+
+  function wsCards(ws,d){
+    var tiles=[], lg=d.ledger||{};
+    if(ws&&ws.files){
+      tiles=[['Files indexed',full(ws.files),'tracked in the code graph'],
+             ['Symbols',full(ws.symbols),'functions, classes, methods'],
+             ['Graph edges',full(ws.edges),'calls, imports, inheritance'],
+             ['Indexed chunks',full(ws.chunks),'retrievable text blocks'],
+             ['Module summaries',full(ws.summaries),'reused by future packs'],
+             ['Tokens in repo',fmt(ws.indexed_tokens),'estimated across indexed files'],
+             ['Graph size',(Number(ws.db_bytes||0)/1048576).toFixed(1)+' MB',
+              'tokengraph/graph.db']];
+    }
+    if(lg.first_ts){
+      tiles.push(['First run',
+        new Date(lg.first_ts*1000).toLocaleDateString(),'oldest ledger entry']);
+      tiles.push(['Active days',full(lg.active_days),
+        'days with at least one recorded run']);
+    }
+    if(!tiles.length)return empty('No graph index found',
+      'Workspace facts appear once the graph database exists — run an index or '+
+      'any context call.');
+    var o='<div class="grid g-4">';
+    tiles.forEach(function(t){
+      o+='<div class="stat sm"><div class="k">'+esc(t[0])+'</div>'+
+        '<div class="v num">'+esc(t[1])+'</div><div class="n">'+esc(t[2])+
+        '</div></div>';
+    });
+    return o+'</div>';
+  }
+
+  function langBars(ws){
+    var langs=(ws&&ws.languages)||[];
+    if(!langs.length)return empty('No language breakdown',
+      'Index the workspace to see what the graph covers.');
+    var top=langs.slice(0,8), tot=0;
+    langs.forEach(function(l){tot+=l.files;});
+    var max=Math.max.apply(null,top.map(function(l){return l.files;}).concat([1]));
+    var w=940,lw=140,right=220,rh=30,bt=14,h=top.length*rh+10,o='';
+    top.forEach(function(l,i){
+      var y=i*rh+8, bw=Math.max(2,(l.files/max)*(w-lw-right));
+      o+='<text x="0" y="'+(y+bt-2)+'" font-size="12" fill="currentColor">'+
+        esc(String(l.language).slice(0,14))+'</text>'+
+        '<path d="'+barEnd(lw,y,bw,bt,4)+'" fill="'+C_SENT+'">'+
+        tip(l.language+': '+full(l.files)+' file(s), '+fmt(l.tokens)+
+        ' tokens indexed')+'</path>'+
+        '<text x="'+(lw+bw+8)+'" y="'+(y+bt-3)+'" font-size="11" fill="'+MUT+'">'+
+        full(l.files)+' files · '+fmt(l.tokens)+' tok · '+pct(l.files,tot)+
+        '%</text>';
+    });
+    return svg(w,h,'Indexed files by language',o);
+  }
+
+  /* ---------- code graph ---------------------------------------------------- */
+  // The layout arrives pre-solved in the payload (deterministic, computed once
+  // per reindex), so this stays a pure renderer like every other chart on the
+  // page — no simulation loop, no canvas, no RNG, and the same index always
+  // draws the same picture.
+  var GTIER={'ast':'var(--s-saved)','tree-sitter':'var(--s-sent)',
+             'regex':'var(--s-base)'};
+  var GTIER_NOTE={'ast':'exact call graph','tree-sitter':'call graph by name',
+                  'regex':'symbols only — no call edges were extracted'};
+  var GEDGE={'CALLS':'var(--s-sent)','IMPORTS':'var(--s-c5)',
+             'INHERITS':'var(--s-c3)','DEFINES':'var(--s-base)',
+             'REFERENCES':'var(--s-c4)'};
+  var GW=920, GH=520;
+
+  function graphOn(){
+    var g=state.data.graph;
+    return !!(g&&g.enabled&&g.levels);
+  }
+  function glevel(){
+    var g=state.data.graph||{};
+    if(g.levels&&g.levels[state.glevel])return state.glevel;
+    return g.default_level||'module';
+  }
+  function gdata(){
+    var g=state.data.graph||{};
+    return (g.levels&&g.levels[glevel()])||null;
+  }
+  function degree(n){return (n.fan_in||0)+(n.fan_out||0);}
+
+  function graphChart(){
+    if(!graphOn())return empty('Code graph not included',
+      'This is the one panel that names things, so it is opt-in. Rebuild with '+
+      '`gain --report --graph` (or set TOKENGRAPH_REPORT_GRAPH=1) and the '+
+      'module and file graph appears here.');
+    var lv=gdata();
+    if(!lv||!lv.nodes.length)return empty('Nothing indexed yet',
+      'Run an index or any context call, then rebuild the report.');
+    var nodes=lv.nodes, edges=lv.edges, i, maxSize=1, maxW=1;
+    for(i=0;i<nodes.length;i++)
+      maxSize=Math.max(maxSize,nodes[i].tokens||nodes[i].symbols||1);
+    for(i=0;i<edges.length;i++)maxW=Math.max(maxW,edges[i][3]||1);
+    function rad(n){
+      return 5+13*Math.sqrt((n.tokens||n.symbols||1)/maxSize);
+    }
+    // One arrowhead marker per edge type present: direction is the whole point
+    // of a dependency graph, so the arrows are not decoration.
+    var types=[], seen={}, mark={};
+    edges.forEach(function(e){if(!seen[e[2]]){seen[e[2]]=1;types.push(e[2]);}});
+    var out='<defs>';
+    types.forEach(function(t,ti){
+      mark[t]=ti;
+      out+='<marker id="ciq-ga'+ti+'" viewBox="0 0 8 8" refX="7.5" refY="4" '+
+        'markerWidth="4.5" markerHeight="4.5" orient="auto">'+
+        '<path d="M0,0 L8,4 L0,8 z" fill="'+(GEDGE[t]||MUT)+'"/></marker>';
+    });
+    out+='</defs>';
+    edges.forEach(function(e){
+      var a=nodes[e[0]], b=nodes[e[1]];
+      if(!a||!b)return;
+      var dx=b.x-a.x, dy=b.y-a.y, d=Math.sqrt(dx*dx+dy*dy)||1, w=e[3]||1;
+      // trimmed to the circle edges so the arrowhead is never hidden under a node
+      var x1=a.x+dx/d*(rad(a)+1), y1=a.y+dy/d*(rad(a)+1);
+      var x2=b.x-dx/d*(rad(b)+5.5), y2=b.y-dy/d*(rad(b)+5.5);
+      out+='<line x1="'+x1.toFixed(1)+'" y1="'+y1.toFixed(1)+'" x2="'+
+        x2.toFixed(1)+'" y2="'+y2.toFixed(1)+'" stroke="'+(GEDGE[e[2]]||MUT)+
+        '" stroke-width="'+(1+Math.min(2.6,Math.log(1+w))).toFixed(2)+
+        '" opacity="'+(0.22+0.5*Math.min(1,w/maxW)).toFixed(2)+
+        '" marker-end="url(#ciq-ga'+mark[e[2]]+')">'+
+        tip(a.key+' → '+b.key+'  ('+String(e[2]).toLowerCase()+
+          (w>1?', '+full(w)+' edges':'')+')')+'</line>';
+    });
+    // Label the hubs only, and drop any label that would collide with one
+    // already placed: at 80 nodes labelling everything produces a smear of
+    // overlapping text, and an unreadable label is worse than none. The table
+    // below carries every node either way.
+    var order=nodes.slice().sort(function(p,q){
+      return (degree(q)-degree(p))||(p.key<q.key?-1:1);});
+    var labelled={}, boxes=[], want=nodes.length<=24?nodes.length:18;
+    for(i=0;i<order.length&&boxes.length<want;i++){
+      var nd=order[i], txt=String(nd.label).slice(0,26);
+      var lw=txt.length*5.9, lx=nd.x-lw/2, ly=nd.y-rad(nd)-16;
+      if(lx<0||lx+lw>GW||ly<0)continue;
+      var hit=false;
+      for(var b=0;b<boxes.length;b++){
+        var o=boxes[b];
+        if(lx<o[0]+o[2]+3&&lx+lw+3>o[0]&&ly<o[1]+13&&ly+13>o[1]){hit=true;break;}
+      }
+      if(hit)continue;
+      boxes.push([lx,ly,lw]);
+      labelled[nd.key]=1;
+    }
+    nodes.forEach(function(n){
+      var r=rad(n);
+      out+='<circle cx="'+n.x+'" cy="'+n.y+'" r="'+r.toFixed(1)+'" fill="'+
+        (GTIER[n.tier]||MUT)+'" fill-opacity=".82" stroke="'+SURF+
+        '" stroke-width="1.5">'+
+        tip(n.key+'\n'+(n.kind||'')+' · '+(n.language||'unknown')+' · '+
+          (GTIER_NOTE[n.tier]||n.tier||'')+'\n'+fmt(n.tokens)+' tokens · '+
+          full(n.symbols)+' symbols'+(n.files>1?' · '+full(n.files)+' files':'')+
+          '\nfan-in '+full(n.fan_in)+' · fan-out '+full(n.fan_out))+'</circle>';
+      if(labelled[n.key])
+        out+='<text x="'+n.x+'" y="'+(n.y-r-5).toFixed(1)+
+          '" text-anchor="middle" font-size="10.5" font-weight="560" '+
+          'fill="currentColor" paint-order="stroke" stroke="'+SURF+
+          '" stroke-width="3" stroke-linejoin="round">'+
+          esc(String(n.label).slice(0,26))+'</text>';
+    });
+    return svg(GW,GH,'Code graph at '+glevel()+' level: '+nodes.length+
+      ' nodes and '+edges.length+' edges',out);
+  }
+
+  function graphLegend(){
+    var lv=graphOn()&&gdata();
+    if(!lv)return '';
+    var o='';
+    ['ast','tree-sitter','regex'].forEach(function(t){
+      var hit=false;
+      lv.nodes.forEach(function(n){if(n.tier===t)hit=true;});
+      if(!hit)return;
+      o+='<span class="item"><i class="key" style="width:10px;height:10px;'+
+        'border-radius:50%;background:'+GTIER[t]+'"></i>'+esc(t)+'</span>';
+    });
+    (lv.edge_types||[]).forEach(function(t){
+      o+='<span class="item"><i class="key" style="background:'+
+        (GEDGE[t]||MUT)+'"></i>'+esc(String(t).toLowerCase())+'</span>';
+    });
+    return o;
+  }
+
+  function graphSub(){
+    if(!graphOn())return 'Opt-in — this report was built without it';
+    var lv=gdata();
+    if(!lv)return '';
+    var s='Size = tokens indexed · colour = extraction tier · arrows point from '+
+      'dependent to dependency';
+    var t=lv.truncated||{};
+    if(t.limit)s+=' · drawing the '+t.limit+' highest-degree nodes, '+
+      full(t.nodes_dropped)+' not shown';
+    return s;
+  }
+
+  function graphNote(){
+    var lv=graphOn()&&gdata();
+    if(!lv)return '';
+    var regex=0, loose=0, deg={};
+    lv.nodes.forEach(function(n,i){if(n.tier==='regex')regex++;deg[i]=0;});
+    (lv.edges||[]).forEach(function(e){deg[e[0]]++;deg[e[1]]++;});
+    lv.nodes.forEach(function(n,i){if(!deg[i])loose++;});
+    var parts=[];
+    if(regex)parts.push(regex+' of '+lv.nodes.length+' node(s) are regex-indexed '+
+      '(grey): no call edges were ever extracted for them, so an absence of '+
+      'arrows there means "not parsed", not "not used"');
+    if(loose)parts.push(loose+' node(s) have no edges at all and are parked in '+
+      'the bottom row — their position there is arbitrary, not structural');
+    return parts.length?parts.join('. ')+'.':'';
+  }
+
+  function graphTable(){
+    var lv=graphOn()&&gdata();
+    if(!lv||!lv.nodes.length)return '';
+    var rows=lv.nodes.slice().sort(function(p,q){
+      return (degree(q)-degree(p))||(p.key<q.key?-1:1);}).slice(0,25);
+    var o='<div class="table-wrap" tabindex="0" role="region" '+
+      'aria-label="Code graph nodes"><table><caption class="sr">'+
+      'Graph nodes, highest degree first</caption><thead><tr>'+
+      '<th scope="col">Node</th><th scope="col">Language</th>'+
+      '<th scope="col">Extraction</th><th scope="col" class="n">Tokens</th>'+
+      '<th scope="col" class="n">Symbols</th>'+
+      '<th scope="col" class="n">Fan-in</th>'+
+      '<th scope="col" class="n">Fan-out</th></tr></thead><tbody>';
+    rows.forEach(function(n){
+      o+='<tr><td>'+esc(n.key)+'</td><td>'+esc(n.language||'—')+'</td><td>'+
+        esc(n.tier||'—')+'</td><td class="n">'+full(n.tokens)+
+        '</td><td class="n">'+full(n.symbols)+'</td><td class="n">'+
+        full(n.fan_in)+'</td><td class="n">'+full(n.fan_out)+'</td></tr>';
+    });
+    return o+'</tbody></table></div>';
+  }
+
+  function rowsTable(rows){
+    if(!rows.length)return empty('No records in this window',
+      'Savings are appended to the ledger as you use the graph.');
+    var o='<div class="table-wrap" tabindex="0" role="region" '+
+      'aria-label="Raw ledger records"><table><caption class="sr">'+
+      'Most recent ledger entries, newest first</caption><thead><tr>'+
+      '<th scope="col">When</th><th scope="col">Operation</th>'+
+      '<th scope="col" class="n">Files</th><th scope="col" class="n">Baseline</th>'+
+      '<th scope="col" class="n">Sent</th><th scope="col" class="n">Avoided</th>'+
+      '<th scope="col" class="n">Reduction</th>'+
+      '<th scope="col" class="n">Cost avoided</th></tr></thead><tbody>';
+    rows.slice().reverse().slice(0,50).forEach(function(r){
+      o+='<tr><td>'+esc(r.ts?new Date(r.ts*1000).toLocaleString():'—')+'</td><td>'+
+        esc(r.op||'?')+'</td><td class="n">'+(r.files==null?'—':full(r.files))+
+        '</td><td class="n">'+full(r.baseline_tokens)+'</td><td class="n">'+
+        full(r.final_tokens)+'</td><td class="n">'+full(r.saved)+
+        '</td><td class="n">'+(r.reduction_pct||0)+'%</td><td class="n">'+
+        usd(savedUsd(Number(r.saved)||0))+'</td></tr>';
+    });
+    return o+'</tbody></table></div>';
+  }
+
+  /* ---------- draw --------------------------------------------------------- */
+  function draw(){
+    var d=state.data, s=series(), t=totals(s), op=ops();
+    var lg=d.ledger||{}, ws=d.workspace_stats||{};
+
+    set('hero-value',usd(savedUsd(t.saved)));
+    set('hero-sub',fmt(t.saved)+' tokens never sent · prompts '+
+      t.reduction_pct+'% smaller · '+rangeLabel());
+    set('hero-note','Reading the same files whole would have cost '+
+      usd(savedUsd(t.baseline))+' in input tokens; the packs cost '+
+      usd(spendUsd(t.final))+'.');
+
+    set('m-saved',fmt(t.saved));
+    set('k-saved-n',full(t.saved)+' tokens · '+rangeLabel());
+    put('k-spark',sparkline(s.slice(-14).map(function(x){return x.saved||0;})));
+    set('m-sent',fmt(t.final));
+    set('k-sent-n',pct(t.final,t.baseline)+'% of a '+fmt(t.baseline)+
+      '-token baseline');
+    set('m-spend',usd(spendUsd(t.final)));
+    set('k-spend-n',state.model+' '+priceLabel());
+    set('m-red',t.reduction_pct+'%');
+    set('k-red-n','smaller than reading those files whole');
+    set('m-runs',full(t.runs||0));
+    set('k-runs-n',op.length+' operation type(s) recorded');
+    set('m-baseline',fmt(t.baseline));
+    set('m-avg',t.runs?fmt(Math.round(t.saved/t.runs)):'—');
+    set('m-leverage',t.final?((t.baseline/t.final).toFixed(1)+'×'):'—');
+    set('m-files',full(t.files||0));
+    set('unit-price',priceLabel());
+
+    put('c-gauge',gauge(t));
+    put('c-waterfall',waterfall(t));
+    put('c-area',areaChart(s));
+    put('c-heat',heatmap(d.daily||[]));
+    put('c-ops',opBars(op));
+    put('c-mix',donut(op));
+    put('c-optable',opTable(op,t));
+    put('c-models',modelChart(t));
+    put('c-modeltable',modelTable(t));
+    put('c-ws',wsCards(ws,d));
+    put('c-langs',langBars(ws));
+    put('c-graph',graphChart());
+    put('graph-legend',graphLegend());
+    set('graph-sub',graphSub());
+    set('graph-note',graphNote());
+    put('c-graphtable',graphTable());
+    put('c-rows',rowsTable(windowRows()));
+
+    set('range-note',state.range==='all'
+      ? 'Showing all '+full((d.totals||{}).runs||0)+' recorded run(s).'
+      : 'Showing the last '+state.range+' days.'+(d.rows_capped?
+        ' Per-operation and log views cover the most recent '+
+        (d.rows||[]).length+' entries.':''));
+    set('ws-chip',d.workspace||'workspace');
+    put('meta','Workspace <b>'+esc(d.workspace||'—')+'</b>'+
+      (d.generated_at?(' · generated '+esc(d.generated_at)):'')+' · '+
+      (state.live?'<span class="pill live"><span class="dot"></span>live</span>'
+                 :'<span class="pill">snapshot</span>')+
+      (state.err?' <span class="pill warn">offline · showing last snapshot</span>'
+                 :''));
+    put('onboard',t.runs?'':
+      '<div class="banner info"><div><b>No runs in this window yet.</b> '+
+      'ContextIQ appends one line to <code>.context/gain.ndjson</code> every '+
+      'time it builds a context pack — run a context, ask or measure call (or '+
+      'use the MCP tools), then refresh.</div></div>');
+    // The privacy line is not boilerplate — it states what this specific file
+    // contains, and the graph panel is the one thing that changes the answer.
+    set('foot-privacy',graphOn()
+      ? 'counts, plus this workspace\'s module and file names (graph panel)'
+      : 'counts only, never file paths or queries');
+    set('foot-gen',d.generated_at||'not stamped');
+    set('foot-ver','schema v'+(d.version||1));
+  }
+
+  /* ---------- controls ------------------------------------------------------ */
+  function applyTheme(){
+    var r=document.documentElement;
+    if(r){
+      if(state.theme==='auto'){if(r.removeAttribute)r.removeAttribute('data-theme');}
+      else if(r.setAttribute)r.setAttribute('data-theme',state.theme);
+    }
+    set('btn-theme',state.theme==='dark'?'☾':(state.theme==='light'?'☀':'◐'));
+    var b=el('btn-theme');
+    if(b&&b.setAttribute)b.setAttribute('aria-label',
+      'Colour theme: '+state.theme+'. Activate to change.');
+  }
+  function controls(){
+    var d=state.data, ms=el('sel-model'), rs=el('sel-range'), ck=el('chk-auto');
+    if(ms){
+      Object.keys(d.prices||{}).forEach(function(m){
+        var o=document.createElement('option');
+        o.value=m; o.textContent=m;
+        ms.appendChild(o);
+      });
+      ms.value=state.model;
+      ms.addEventListener('change',function(){
+        state.model=ms.value; writeHash(); draw();});
+    }
+    if(rs){
+      rs.value=state.range;
+      rs.addEventListener('change',function(){
+        state.range=rs.value; writeHash(); draw();});
+    }
+    if(ck){
+      ck.checked=state.auto;
+      ck.addEventListener('change',function(){
+        state.auto=ck.checked; writeHash(); startTimer();});
+    }
+    var gs=el('sel-glevel');
+    if(gs){
+      gs.value=glevel();
+      gs.disabled=!graphOn();
+      gs.addEventListener('change',function(){
+        state.glevel=gs.value; writeHash(); draw();});
+    }
+    on('btn-theme','click',function(){
+      state.theme=THEMES[(THEMES.indexOf(state.theme)+1)%THEMES.length];
+      applyTheme(); writeHash();});
+    on('btn-refresh','click',function(){
+      if(location.protocol==='file:'){location.reload();return;}
+      refresh(); startTimer();});
+  }
+
+  function refresh(){
+    if(location.protocol==='file:'){draw();return;}
+    fetch('data.json',{cache:'no-store'}).then(function(r){
+      if(!r.ok)throw 0;
+      return r.json();
+    }).then(function(j){
+      state.live=true; state.err=false;
+      var s=sig(j);
+      if(s===state.sig){renderTimer();return;}   // nothing changed — no redraw
+      state.sig=s; state.data=j; draw();
+    }).catch(function(){state.err=true; draw();});
+  }
+
+  /* ---------- auto-refresh: visible countdown, pausable --------------------- */
+  function period(){return location.protocol==='file:'?15:10;}
+  function renderTimer(){
+    var c=el('countdown');
+    if(!c)return;
+    c.textContent=state.auto?('refresh in '+state.left+'s'):'auto-refresh paused';
+  }
+  function startTimer(){
+    if(tick){clearInterval(tick);tick=null;}
+    state.left=period();
+    renderTimer();
+    if(!state.auto)return;
+    tick=setInterval(function(){
+      state.left--;
+      if(state.left<=0){
+        if(location.protocol==='file:'){
+          // file:// cannot fetch the ledger — reload instead. The hash carries
+          // the current selections across, so the reload is seamless.
+          location.reload();return;
+        }
+        state.left=period();refresh();
+      }
+      renderTimer();
+    },1000);
+  }
+
+  function start(){
+    state.data=JSON.parse(el('ciq-data').textContent);
+    var h=readHash();
+    state.model=(h.model&&state.data.prices[h.model]!==undefined)
+      ?h.model:state.data.model;
+    state.range=(RANGES.indexOf(h.range)>=0)?h.range:'all';
+    state.auto=(h.auto!=='0');
+    state.theme=(THEMES.indexOf(h.theme)>=0)?h.theme:'auto';
+    state.glevel=(GLEVELS.indexOf(h.glevel)>=0)?h.glevel:'module';
+    state.sig=sig(state.data);
+    applyTheme();
+    controls();
+    writeHash();
+    refresh();
+    startTimer();
+  }
+  if(document.readyState!=='loading')start();
+  else document.addEventListener('DOMContentLoaded',start);
+})();
+</script>
+</body></html>

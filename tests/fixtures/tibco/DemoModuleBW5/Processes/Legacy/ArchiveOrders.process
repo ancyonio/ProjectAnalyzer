@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<pd:ProcessDefinition xmlns:pd="http://xmlns.tibco.com/bw/process/2003"
+    xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+    <pd:name>Legacy/ArchiveOrders.process</pd:name>
+    <pd:targetNamespace>http://xmlns.example.com/legacy/ArchiveOrders</pd:targetNamespace>
+
+    <pd:starter name="TimerStart">
+        <pd:type>com.tibco.plugin.timer.TimerEventSource</pd:type>
+        <config>
+            <TimeInterval>3600000</TimeInterval>
+        </config>
+    </pd:starter>
+
+    <pd:activity name="ArchiveQuery">
+        <pd:type>com.tibco.plugin.jdbc.JDBCQueryActivity</pd:type>
+        <config>
+            <JDBCSharedConfig>/SharedResources/LegacyOrdersDB.sharedjdbc</JDBCSharedConfig>
+            <statement>SELECT order_id FROM orders WHERE created &lt; SYSDATE - 365</statement>
+        </config>
+    </pd:activity>
+
+    <pd:activity name="WriteArchiveFile">
+        <pd:type>com.tibco.plugin.file.FileWriteActivity</pd:type>
+        <config>
+            <fileName>/var/archive/orders.csv</fileName>
+        </config>
+    </pd:activity>
+
+    <pd:transition>
+        <pd:from>TimerStart</pd:from>
+        <pd:to>ArchiveQuery</pd:to>
+    </pd:transition>
+    <pd:transition>
+        <pd:from>ArchiveQuery</pd:from>
+        <pd:to>WriteArchiveFile</pd:to>
+    </pd:transition>
+</pd:ProcessDefinition>
