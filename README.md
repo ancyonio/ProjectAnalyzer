@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 # ProjectAnalyzer
-Project Analysis
-=======
-# TIBCO Analysis for GitHub Copilot
 
 A comprehensive analysis solution for legacy **TIBCO BusinessWorks** estates — both
 **BW5** (`.process`) and **BW6 / BusinessWorks Container Edition** (`.bwp`) — built on a
@@ -661,4 +657,3 @@ After any change, re-run the pipeline against a real TIBCO tree and confirm
 ## Licence
 
 MIT. The analyzer contains no TIBCO or third-party proprietary code.
->>>>>>> eb3733d (Initial Code for ProjectAnalyzer)
