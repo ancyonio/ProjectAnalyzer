@@ -1,0 +1,205 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Cross-estate fixture (docs/ESTATE_ANALYZER_SPEC.md section 10).
+
+    Four JDBC activities, chosen so the federation matcher is asserted rather
+    than assumed:
+
+      ReadCustomers   SELECT ORDER_APP.CUSTOMERS   qualified in the SQL itself
+      WriteOrderLines INSERT ORDER_LINES           unqualified, needs the estate map
+      WriteAuditLog   INSERT AUDIT_LOG             also written by an Oracle unit that
+                                                   commits, which is XE-003
+      ReadNearMiss    SELECT ORDER_LINE            singular: looks like ORDER_LINES
+                                                   but no such object exists, so a
+                                                   matcher that normalises too
+                                                   eagerly fails a test here
+      DirectSql       (no statement)               SQLDirect builds SQL at runtime;
+                                                   invisible by design, must land in
+                                                   the unbound list, not be dropped
+-->
+<bpws:process exitOnStandardFault="no" name="sync.CustomerSync"
+    suppressJoinFailure="yes"
+    targetNamespace="http://xmlns.example.com/sync/CustomerSync"
+    xmlns:bpws="http://docs.oasis-open.org/wsbpel/2.0/process/executable"
+    xmlns:ns="http://www.tibco.com/pe/EngineTypes"
+    xmlns:sca-bpel="http://docs.oasis-open.org/ns/opencsa/sca-bpel/200801"
+    xmlns:tibex="http://www.tibco.com/bpel/2007/extensions"
+    xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+
+    <bpws:variables>
+        <bpws:variable name="jdbcProperty" sca-bpel:hotUpdate="false"
+            sca-bpel:privateProperty="true" sca-bpel:property="yes"
+            sca-bpel:sharedResourceType="{http://xsd.tns.tibco.com/amf/models/sharedresource/jdbc}JdbcDataSource"
+            type="xsd:string">
+            <bpws:from>
+                <bpws:literal>sync.OrderApp_JDBCConnectionResource</bpws:literal>
+            </bpws:from>
+        </bpws:variable>
+    </bpws:variables>
+
+    <bpws:links>
+        <bpws:link name="StartToRead"/>
+        <bpws:link name="ReadToWrite"/>
+        <bpws:link name="WriteToAudit"/>
+        <bpws:link name="AuditToNearMiss"/>
+        <bpws:link name="NearMissToDirect"/>
+    </bpws:links>
+
+    <bpws:sequence>
+        <bpws:extensionActivity>
+            <tibex:receiveEvent createInstance="yes" eventTimeout="0" name="SyncTimer">
+                <bpws:sources>
+                    <bpws:source linkName="StartToRead"/>
+                </bpws:sources>
+                <tibex:eventSource>
+                    <bwext:BWActivity activityTypeID="bw.timer.timerEventSource"
+                        version="6.0.0"
+                        xmlns:activityconfig="http://tns.tibco.com/bw/model/activityconfig"
+                        xmlns:bwext="http://tns.tibco.com/bw/model/core/bwext"
+                        xmlns:timer="http://ns.tibco.com/bw/palette/timer"
+                        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+                        <activityConfig>
+                            <properties name="config" xsi:type="activityconfig:EMFProperty">
+                                <type href="http://ns.tibco.com/bw/palette/timer#//TimerEventSource"/>
+                                <value timeInterval="3600000" xsi:type="timer:TimerEventSource"/>
+                            </properties>
+                        </activityConfig>
+                    </bwext:BWActivity>
+                </tibex:eventSource>
+            </tibex:receiveEvent>
+        </bpws:extensionActivity>
+
+        <bpws:extensionActivity>
+            <tibex:activityExtension name="ReadCustomers">
+                <bpws:targets>
+                    <bpws:target linkName="StartToRead"/>
+                </bpws:targets>
+                <bpws:sources>
+                    <bpws:source linkName="ReadToWrite"/>
+                </bpws:sources>
+                <tibex:config>
+                    <bwext:BWActivity activityTypeID="bw.jdbc.query"
+                        xmlns:activityconfig="http://tns.tibco.com/bw/model/activityconfig"
+                        xmlns:bwext="http://tns.tibco.com/bw/model/core/bwext"
+                        xmlns:jdbc="http://ns.tibco.com/bw/palette/jdbc"
+                        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+                        <activityConfig>
+                            <properties name="config" xsi:type="activityconfig:EMFProperty">
+                                <type href="http://ns.tibco.com/bw/palette/jdbc#//JDBCQueryActivity"/>
+                                <value maxRows="500"
+                                    sharedResourceProperty="jdbcProperty"
+                                    sqlStatement="SELECT customer_id, name FROM ORDER_APP.CUSTOMERS WHERE region_id = ?"
+                                    xsi:type="jdbc:JDBCQueryActivity"/>
+                            </properties>
+                        </activityConfig>
+                    </bwext:BWActivity>
+                </tibex:config>
+            </tibex:activityExtension>
+        </bpws:extensionActivity>
+
+        <bpws:extensionActivity>
+            <tibex:activityExtension name="WriteOrderLines">
+                <bpws:targets>
+                    <bpws:target linkName="ReadToWrite"/>
+                </bpws:targets>
+                <bpws:sources>
+                    <bpws:source linkName="WriteToAudit"/>
+                </bpws:sources>
+                <tibex:config>
+                    <bwext:BWActivity activityTypeID="bw.jdbc.update"
+                        xmlns:activityconfig="http://tns.tibco.com/bw/model/activityconfig"
+                        xmlns:bwext="http://tns.tibco.com/bw/model/core/bwext"
+                        xmlns:jdbc="http://ns.tibco.com/bw/palette/jdbc"
+                        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+                        <activityConfig>
+                            <properties name="config" xsi:type="activityconfig:EMFProperty">
+                                <type href="http://ns.tibco.com/bw/palette/jdbc#//JDBCUpdateActivity"/>
+                                <value sharedResourceProperty="jdbcProperty"
+                                    sqlStatement="insert into order_lines values (?,?,?,?)"
+                                    xsi:type="jdbc:JDBCUpdateActivity"/>
+                            </properties>
+                        </activityConfig>
+                    </bwext:BWActivity>
+                </tibex:config>
+            </tibex:activityExtension>
+        </bpws:extensionActivity>
+
+        <bpws:extensionActivity>
+            <tibex:activityExtension name="WriteAuditLog">
+                <bpws:targets>
+                    <bpws:target linkName="WriteToAudit"/>
+                </bpws:targets>
+                <bpws:sources>
+                    <bpws:source linkName="AuditToNearMiss"/>
+                </bpws:sources>
+                <tibex:config>
+                    <bwext:BWActivity activityTypeID="bw.jdbc.update"
+                        xmlns:activityconfig="http://tns.tibco.com/bw/model/activityconfig"
+                        xmlns:bwext="http://tns.tibco.com/bw/model/core/bwext"
+                        xmlns:jdbc="http://ns.tibco.com/bw/palette/jdbc"
+                        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+                        <activityConfig>
+                            <properties name="config" xsi:type="activityconfig:EMFProperty">
+                                <type href="http://ns.tibco.com/bw/palette/jdbc#//JDBCUpdateActivity"/>
+                                <value sharedResourceProperty="jdbcProperty"
+                                    sqlStatement="insert into audit_log (audit_id, table_name) values (?,?)"
+                                    xsi:type="jdbc:JDBCUpdateActivity"/>
+                            </properties>
+                        </activityConfig>
+                    </bwext:BWActivity>
+                </tibex:config>
+            </tibex:activityExtension>
+        </bpws:extensionActivity>
+
+        <bpws:extensionActivity>
+            <tibex:activityExtension name="ReadNearMiss">
+                <bpws:targets>
+                    <bpws:target linkName="AuditToNearMiss"/>
+                </bpws:targets>
+                <bpws:sources>
+                    <bpws:source linkName="NearMissToDirect"/>
+                </bpws:sources>
+                <tibex:config>
+                    <bwext:BWActivity activityTypeID="bw.jdbc.query"
+                        xmlns:activityconfig="http://tns.tibco.com/bw/model/activityconfig"
+                        xmlns:bwext="http://tns.tibco.com/bw/model/core/bwext"
+                        xmlns:jdbc="http://ns.tibco.com/bw/palette/jdbc"
+                        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+                        <activityConfig>
+                            <properties name="config" xsi:type="activityconfig:EMFProperty">
+                                <type href="http://ns.tibco.com/bw/palette/jdbc#//JDBCQueryActivity"/>
+                                <value maxRows="10"
+                                    sharedResourceProperty="jdbcProperty"
+                                    sqlStatement="SELECT line_id FROM ORDER_LINE"
+                                    xsi:type="jdbc:JDBCQueryActivity"/>
+                            </properties>
+                        </activityConfig>
+                    </bwext:BWActivity>
+                </tibex:config>
+            </tibex:activityExtension>
+        </bpws:extensionActivity>
+
+        <bpws:extensionActivity>
+            <tibex:activityExtension name="DirectSql">
+                <bpws:targets>
+                    <bpws:target linkName="NearMissToDirect"/>
+                </bpws:targets>
+                <tibex:config>
+                    <bwext:BWActivity activityTypeID="bw.jdbc.SQLDirect"
+                        xmlns:activityconfig="http://tns.tibco.com/bw/model/activityconfig"
+                        xmlns:bwext="http://tns.tibco.com/bw/model/core/bwext"
+                        xmlns:jdbc="http://ns.tibco.com/bw/palette/jdbc"
+                        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+                        <activityConfig>
+                            <properties name="config" xsi:type="activityconfig:EMFProperty">
+                                <type href="http://ns.tibco.com/bw/palette/jdbc#//SQLDirectActivity"/>
+                                <value sharedResourceProperty="jdbcProperty"
+                                    xsi:type="jdbc:SQLDirectActivity"/>
+                            </properties>
+                        </activityConfig>
+                    </bwext:BWActivity>
+                </tibex:config>
+            </tibex:activityExtension>
+        </bpws:extensionActivity>
+    </bpws:sequence>
+</bpws:process>

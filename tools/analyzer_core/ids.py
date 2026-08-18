@@ -14,6 +14,8 @@ Grammar:
     db:ORDER_APP.ORDERS         database object
     db:ORDER_APP.ORDERS.ORD_ID  column
     sql:9f2c1a…                 content-addressed code node
+    project:order_app           analysed project
+    repo:order_app              source repository
 """
 from __future__ import annotations
 
@@ -113,6 +115,16 @@ def unresolved_id(raw: str) -> str:
 
 
 # ── repository / analysis ─────────────────────────────────────────────────
+def project_id(name: str) -> str:
+    """The analysed unit of work. One spelling, so a federated graph can tell
+    two projects apart instead of tripping over `proj:` and `project:`."""
+    return f'project:{clean(name)}'
+
+
+def repository_id(name: str) -> str:
+    return f'repo:{clean(name)}'
+
+
 def file_id(relative_path: str) -> str:
     return f'file:{str(relative_path).replace(chr(92), "/")}'
 

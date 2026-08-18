@@ -29,14 +29,18 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / 'tools'))
 
+from analyzer_core.graph.exporters import Neo4jExporter             # noqa: E402
+from analyzer_core.graph.validate import GraphValidator             # noqa: E402
 from tibco_analyzer.analysis.impact import ImpactAnalyzer           # noqa: E402
 from tibco_analyzer.analysis.inventory import (entry_points,        # noqa: E402
                                                full_inventory,
-                                               integration_surface)
+                                               integration_surface,
+                                               issues_summary)
 from tibco_analyzer.analyzer import TibcoAnalyzer                   # noqa: E402
 from tibco_analyzer.constants import bw6_activity_mapping           # noqa: E402
-from tibco_analyzer.graph.exporters import Neo4jExporter            # noqa: E402
-from tibco_analyzer.graph.validate import GraphValidator            # noqa: E402
+from tibco_analyzer.graph.schema import (neo4j_schema,              # noqa: E402
+                                         validation_config)
+from tibco_analyzer.graph.summary import write_analysis_summary     # noqa: E402
 from tibco_analyzer.model import Graph                              # noqa: E402
 
 FIXTURE = REPO_ROOT / 'tests' / 'fixtures' / 'tibco'
@@ -242,13 +246,58 @@ def test_control_flow_is_connected():
     assert ('TimerStart', 'ArchiveQuery') in transitions
 
 
+# ── rule findings ─────────────────────────────────────────────────────
+def test_rules_fire_on_the_fixture_conditions():
+    """The fixture carries real conditions, not synthetic ones: two resources
+    with an embedded credential, a secret-named global variable, and two
+    processes that call out with no error handler."""
+    with tempfile.TemporaryDirectory() as tmp:
+        graph = _analyze(Path(tmp))
+
+    by_rule = {}
+    for issue in graph.by_label('Issue'):
+        by_rule.setdefault(issue.properties['ruleId'], []).append(
+            issue.properties['targetName'])
+
+    assert set(by_rule) == {'SEC-001', 'SEC-002', 'CORR-001'}
+    assert set(by_rule['SEC-001']) == {'LegacyOrdersDB', 'Demo_JDBCConnectionResource'}
+    assert by_rule['SEC-002'] == ['OrderDbPassword']
+    assert set(by_rule['CORR-001']) == {'ArchiveOrders', 'OrderIntake'}
+    assert graph.meta['issueCount'] == 5
+
+
+def test_every_finding_carries_a_recommendation():
+    with tempfile.TemporaryDirectory() as tmp:
+        graph = _analyze(Path(tmp))
+
+    summary = issues_summary(graph)
+    assert summary['total'] == 5
+    assert summary['bySeverity'] == {'HIGH': 5}
+    assert all(f['recommendation'] for f in summary['findings'])
+    assert all(f['filePath'] for f in summary['findings'])
+
+
+def test_credential_values_never_reach_the_graph():
+    """The parser records that a credential is present, never what it is. A
+    graph that carried the secret would be worse than no finding at all."""
+    with tempfile.TemporaryDirectory() as tmp:
+        graph = _analyze(Path(tmp))
+
+    serialised = json.dumps(graph.to_dict())
+    assert 'FIXTUREOBFUSCATEDPASSWORD' not in serialised
+    assert 'LEGACYOBFUSCATEDPASSWORD' not in serialised
+    flagged = [n.name for n in graph.by_label('SharedResource')
+               if n.properties.get('hasEmbeddedCredential')]
+    assert set(flagged) == {'LegacyOrdersDB', 'Demo_JDBCConnectionResource'}
+
+
 # ── graph integrity ───────────────────────────────────────────────────
 def test_validation_passes():
     with tempfile.TemporaryDirectory() as tmp:
         tmp_path = Path(tmp)
         graph = _analyze(tmp_path)
-        Neo4jExporter(graph, tmp_path).write_all()
-        result = GraphValidator(graph, tmp_path).run()
+        Neo4jExporter(graph, tmp_path, neo4j_schema()).write_all()
+        result = GraphValidator(graph, validation_config(tmp_path), tmp_path).run()
 
     # Errors are the gate. The fixture is deliberately small, so it carries no
     # subprocess calls or fault handlers and the relationship-coverage rule
@@ -282,7 +331,7 @@ def test_unmodelled_java_does_not_report_a_parser_gap():
             'final class Helper {}\n', encoding='utf-8')
 
         graph = TibcoAnalyzer(source, tmp_path / 'output').analyze()
-        result = GraphValidator(graph).run()
+        result = GraphValidator(graph, validation_config()).run()
 
     coverage = graph.meta['coverage']
     assert coverage['artifactCoverage'] == 100.0
@@ -305,7 +354,7 @@ def test_shared_resource_coverage_rule_catches_a_parser_gap():
                           if n.label != 'SharedResource'},
                          [r for r in graph.rels],
                          dict(graph.meta))
-        result = GraphValidator(stripped).run()
+        result = GraphValidator(stripped, validation_config()).run()
 
     gap = [f for f in result['findings'] if f['rule'] == 'shared-resource-coverage']
     assert gap and gap[0]['severity'] == 'ERROR', result['findings']
@@ -327,7 +376,7 @@ def test_neo4j_export_round_trips():
     with tempfile.TemporaryDirectory() as tmp:
         tmp_path = Path(tmp)
         graph = _analyze(tmp_path)
-        Neo4jExporter(graph, tmp_path).write_all()
+        Neo4jExporter(graph, tmp_path, neo4j_schema()).write_all()
 
         nodes_csv = (tmp_path / 'neo4j_nodes.csv').read_text(encoding='utf-8')
         rels_csv = (tmp_path / 'neo4j_relationships.csv').read_text(encoding='utf-8')

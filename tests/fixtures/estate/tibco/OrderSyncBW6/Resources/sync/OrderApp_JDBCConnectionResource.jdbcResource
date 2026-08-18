@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jndi:namedResource xmi:version="2.0" xmlns:xmi="http://www.omg.org/XMI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:jdbc="http://xsd.tns.tibco.com/amf/models/sharedresource/jdbc" xmlns:jndi="http://xsd.tns.tibco.com/amf/models/sharedresource/jndi" xmlns:subject="http://xsd.tns.tibco.com/trinity/models/identity/subject" xmi:id="_estate0001" name="sync.OrderApp_JDBCConnectionResource" type="jdbc:JdbcDataSource">
+  <jndi:reference xmi:id="_estate0002" key="subjectJndiName" type="subject:SubjectConfiguration" value=""/>
+  <jndi:configuration xsi:type="jdbc:JdbcDataSource" xmi:id="_estate0003" username="order_app" password="#!FIXTUREOBFUSCATEDPASSWORD">
+    <connectionConfig xsi:type="jdbc:NonXaConnection" xmi:id="_estate0004" jdbcDriver="oracle.jdbc.OracleDriver" dbURL="jdbc:oracle:thin:@orders-db.internal:1521/ORDERS"/>
+  </jndi:configuration>
+</jndi:namedResource>

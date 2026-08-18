@@ -23,7 +23,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from analyzer_core.ids import app_id, db_ident, js_id, plsql_id, sql_id
+from analyzer_core.ids import (app_id, db_ident, js_id, plsql_id,
+                               project_id, sql_id)
 from analyzer_core.model import Graph, GraphNode, GraphRel
 from analyzer_core.utils import read_text, sha1_16, truncate
 
@@ -341,7 +342,7 @@ class ApexAnalyzer(
             else f'apex@{digest[:12]}'
 
     def _register_files(self) -> None:
-        project_node = f'proj:{self.source_root.name}'
+        project_node = project_id(self.source_root.name)
         self._node(project_node, 'Project', self.source_root.name,
                    {'rootPath': str(self.source_root)})
         for export_file in self.inventory.files:

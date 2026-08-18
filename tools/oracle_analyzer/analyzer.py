@@ -24,7 +24,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from analyzer_core.ids import object_id, schema_id
+from analyzer_core.ids import (object_id, project_id, repository_id,
+                               schema_id)
 from analyzer_core.model import Graph, GraphNode, GraphRel
 from analyzer_core.utils import sha1_16
 
@@ -96,8 +97,8 @@ class OracleAnalyzer(
         self.dictionary_only: List[str] = []
 
         self.stats: Counter = Counter()
-        self.repository_id = 'repo:' + (self.source_root.name or 'oracle')
-        self.project_id = f'project:{self.source_root.name}'
+        self.repository_id = repository_id(self.source_root.name or 'oracle')
+        self.project_id = project_id(self.source_root.name)
 
     # ── graph helpers ─────────────────────────────────────────────────
     def _add_node(self, node: GraphNode) -> GraphNode:
@@ -144,7 +145,7 @@ class OracleAnalyzer(
 
     # ── the pipeline ──────────────────────────────────────────────────
     def analyze(self) -> Graph:
-        self.project_id = f'project:{self.source_root.name}'
+        self.project_id = project_id(self.source_root.name)
         self._add_node(GraphNode(self.project_id, 'Project',
                                  self.source_root.name, {
                                      'sourceRoot': str(self.source_root),

@@ -26,12 +26,22 @@ genuinely good at: interpretation, prioritisation and narrative.
 > The two Oracle analyzers share one database vocabulary — `DbTable`, `READS_FROM`,
 > `HAS_UNIT` mean the same thing in both graphs — so the same Cypher answers either.
 
+> **And the three together.** `tools/estate_analyzer`, `estate-analyze`, joins the three
+> finished graphs into one and answers what none of them can alone: which integration
+> writes the table an APEX page reports over, what a schema change breaks across every
+> estate, which tables have more than one writer, and in what order a mixed estate should
+> be cut over. It is a **read-only wrapper** — it parses no source, imports nothing from
+> the three analyzers, and writes nothing into their output directories.
+> See **[Cross-estate analysis](#cross-estate-analysis)** and
+> **[the specification](docs/ESTATE_ANALYZER_SPEC.md)**.
+
 ---
 
 ## Contents
 
 - [What it answers](#what-it-answers)
 - [Quick start](#quick-start)
+- [Cross-estate analysis](#cross-estate-analysis)
 - [Preparing your source tree](#preparing-your-source-tree)
 - [Command reference](#command-reference)
 - [The knowledge graph](#the-knowledge-graph)
@@ -81,6 +91,120 @@ Without installation, every command works as
 
 Requires Python 3.9+ and no third-party packages. Optional extras:
 `pip install -e ".[embeddings]"` (local vectors), `".[openai]"`, `".[neo4j]"`.
+
+---
+
+## Cross-estate analysis
+
+The three analyzers each produce a complete graph of their own world. `estate-analyze`
+joins those three finished graphs and answers what none of them can alone.
+
+```bash
+# 1. Analyse each estate as usual
+PYTHONPATH=tools python -m tibco_analyzer  -o analysis_output        analyze --source <tibco_root>
+PYTHONPATH=tools python -m apex_analyzer   -o analysis_output_apex   analyze --source <export_root>
+PYTHONPATH=tools python -m oracle_analyzer -o analysis_output_oracle analyze --source <repo_root> --schema ORDER_APP
+
+# 2. Join them. This reads their graph.json and nothing else.
+PYTHONPATH=tools python -m estate_analyzer -o analysis_output_estate all     --tibco analysis_output --apex analysis_output_apex     --oracle analysis_output_oracle --estate-map estate_map.json
+```
+
+### The two halves of the join
+
+**APEX and Oracle join exactly.** Both use the natural-key id grammar in
+`analyzer_core.ids`, so `db:ORDER_APP.ORDERS` is the same id in both graphs and the two
+views of one table become one node. No matcher, no heuristic, no confidence score. On the
+committed fixtures, 24 nodes merge this way.
+
+**TIBCO joins by inference.** It shares no ids with either database estate, so its edges
+are matched from the SQL the parser already extracted (`sqlTables`, `sqlVerb`) plus the
+JDBC resource behind the activity. Every one of those edges carries `origin`, `basis`,
+`confidence` and the statement it came from:
+
+| Basis | Confidence | Meaning |
+|---|---|---|
+| `exact` | 1.0 | the two graphs used the same natural key |
+| `declared` | 0.9 | the operator mapped this datasource in the estate map |
+| `qualified-name` | 0.8 | `owner.name` matched, the owner coming from the SQL or the mapped datasource |
+| `name` | 0.5 | a bare table name matched exactly one object in one schema |
+
+`name` matches are **suppressed by default**. They are computed, counted and listed, and
+enter the graph only under `--allow-name-match`. A bare name matching two schemas is
+rejected whatever the flag says.
+
+### The estate map
+
+A JDBC url names a *database*, not an Oracle *schema*, so the wrapper never guesses it:
+
+```json
+{ "datasources": [
+    { "resource": "sync.OrderApp_JDBCConnectionResource", "schema": "ORDER_APP",
+      "note": "orders-db.internal:1521/ORDERS is served by the ORDER_APP schema" }
+] }
+```
+
+An unmapped datasource is not an error — it is finding `XE-005`, and everything behind it
+lands in the unbound list where it can be seen.
+
+### Its own coverage gates
+
+| Metric | Definition | Gate |
+|---|---|---|
+| `sqlBindCoverage` | JDBC activities carrying static SQL that resolved to a database object | 80 % |
+| `datasourceCoverage` | JDBC resources with an estate-map entry | 80 % |
+| `mergedDbNodes` | nodes contributed by more than one estate | reported |
+| `crossEstateLinks` | inferred edges added, by basis | reported |
+
+Below either gate the federated graph is **provisional** and every answer drawn from it
+must say so. Activities that build SQL at runtime are excluded from the denominator and
+counted separately, so a blind spot is reported as a blind spot rather than as a low
+score.
+
+### What it finds that no single analyzer can
+
+| Rule | Fires when |
+|---|---|
+| `XE-001` | a table is written by more than one estate |
+| `XE-002` | a TIBCO statement names a table no database estate models |
+| `XE-003` | a table written from TIBCO is also written by Oracle code that commits |
+| `XE-004` | the same statement digest appears in two estates |
+| `XE-005` | a JDBC shared resource has no estate-map entry |
+| `XE-006` | a JDBC activity carries no static SQL |
+| `XE-007` | an APEX page reads a table a TIBCO process writes |
+
+Imported findings are namespaced on the way in, because the dialects reuse ordinals for
+different rules: `APEX.SEC-001` is SQL injection through dynamic SQL, `ORA.SEC-001` is
+dynamic SQL that defeats static resolution. Categories are canonicalised too, so APEX
+`TECH_DEBT` and Oracle `DEBT` are one category in the merged ledger.
+
+### Worked examples
+
+```bash
+# Everything that breaks if a table changes — in all three estates at once
+estate-analyze -o analysis_output_estate impact --target "DbTable:ORDERS" --direction upstream
+
+# Every cross-estate edge, with the evidence for it, so a reviewer can reject one
+estate-analyze -o analysis_output_estate links
+
+# Only the links that rest on a guess
+estate-analyze -o analysis_output_estate links --basis name
+
+# The derived cutover order
+estate-analyze -o analysis_output_estate sequence
+
+# The merged ledger, cross-estate findings only
+estate-analyze -o analysis_output_estate findings --category CROSS_ESTATE
+
+# CI gate: the federated graph must be trustworthy before anything is built on it
+estate-analyze -o analysis_output_estate validate --strict
+```
+
+### Output
+
+`analysis_output_estate/` carries `graph.json`, `links.json` (every link, every suppressed
+match, every unbound reference and every datasource), the Neo4j export, `context/` packs —
+including `unresolved.md`, which states plainly what the join could not do — three report
+scaffolds and three Mermaid diagrams.
 
 ---
 
@@ -167,6 +291,28 @@ Runs the integrity gate: node-id uniqueness, referential integrity (graph and CS
 relationship-type coverage, process completeness, orphan detection, schema wiring,
 entry-point presence, unresolved references. Writes `validation_report.md` and `.json`.
 `--strict` also fails on warnings.
+
+### `rules [--category C] [--rule ID] [--module M] [--min-severity S] [--fail-on S] [--json]`
+
+Reads the rule findings back out of the graph. The rules themselves run as the last step of
+`analyze`, so a finding travels in `graph.json` as an `Issue` with a `Recommendation` — the
+same shape the APEX and Oracle catalogues use, which is what lets the cross-estate wrapper
+merge all three ledgers.
+
+| Rule | Fires when |
+|---|---|
+| `SEC-001` | a shared resource carries a credential inline (the `#!` obfuscation is reversible) |
+| `SEC-002` | a secret-named global variable ships with a default value |
+| `SEC-003` | a resource is pinned to a developer host |
+| `CORR-001` | a process calls outside the engine with no error handler |
+| `CORR-002` | a process has no starter and no caller, so nothing can invoke it |
+| `PERF-001` | a JDBC activity selects every column |
+| `DEBT-001` | a process is neither called nor exposed |
+| `DEBT-002` | a shared resource nothing references |
+| `DEBT-003` | a referenced artefact was not found in the scanned tree |
+
+Credential *values* are never copied into the graph: the parser records only that one is
+present. `--fail-on HIGH` exits 2, for CI.
 
 ### `index [--no-embeddings] [--provider auto|sentence-transformers|openai|azure-openai] [--source DIR]`
 
@@ -492,10 +638,10 @@ keep the rest generated.
 |-------|------|------|
 | Repository instructions | `.github/copilot-instructions.md` | Deterministic-first rules, citation standard, diagram rules, anti-hallucination checklist |
 | Agent instructions | `AGENTS.md` | The same contract in short form, for any agent that reads `AGENTS.md` rather than the Copilot files |
-| Path-scoped instructions | `.github/instructions/tibco-artefacts.instructions.md` | Fires whenever a `.process`, `.bwp`, `.xsd`, `.wsdl`, `.substvar` or shared-resource file is in context: route the question through the analyzer instead of reading the XML |
-| Skill | `.github/skills/tibco-analyst/SKILL.md` + `references/` | Task playbooks, graph model, Cypher cookbook, search and impact guides, report templates |
-| Prompt files | `.github/prompts/*.prompt.md` | `/tibco-bootstrap-analysis`, `/graph-analysis`, `/architecture-diagrams`, `/discover-baseline`, `/tibco-locate-functionality`, `/tibco-impact-analysis`, `/tibco-neo4j-queries` |
-| Chat modes | `.github/chatmodes/*.chatmode.md` | `tibco-analyst`, `tibco-impact`, `tibco-diagrammer` |
+| Path-scoped instructions | `.github/instructions/*.instructions.md` | One per estate. Fires when a source artefact is in context — `.process`/`.bwp`/`.xsd` for TIBCO, `f*.sql`/`page_*.sql` for APEX, `.pks`/`.pkb`/`.trg` for Oracle, and `estate_map.json` or `analysis_output_estate/**` for the federation — and routes the question through the analyzer instead of the file |
+| Skills | `.github/skills/{tibco,apex,oracle,estate}-analyst/SKILL.md` | Task playbooks, graph model, Cypher cookbook, search and impact guides, report templates |
+| Prompt files | `.github/prompts/*.prompt.md` | TIBCO: `/tibco-bootstrap-analysis`, `/graph-analysis`, `/architecture-diagrams`, `/discover-baseline`, `/tibco-locate-functionality`, `/tibco-impact-analysis`, `/tibco-neo4j-queries`. APEX and Oracle: `/{apex,oracle}-bootstrap-analysis`, `/{apex,oracle}-impact-analysis`, `/{apex,oracle}-security-review`, `/{apex,oracle}-neo4j-queries`, `/oracle-data-lineage`. Cross-estate: `/estate-bootstrap-analysis`, `/estate-impact-analysis`, `/estate-cutover-sequence`, `/estate-neo4j-queries` |
+| Chat modes | `.github/chatmodes/*.chatmode.md` | `{tibco,apex,oracle,estate}-analyst`, `{tibco,apex,oracle,estate}-impact`, `{tibco,apex,oracle,estate}-diagrammer` |
 
 A working order for the prompts:
 
@@ -505,6 +651,15 @@ A working order for the prompts:
 3. `/tibco-locate-functionality` — answer "where is X implemented?"
 4. `/tibco-impact-analysis` — produce a change-impact note for review
 5. `/tibco-neo4j-queries` — load the graph into Neo4j and work through the cookbook
+
+Once more than one estate is analysed, the cross-estate prompts follow the same shape:
+
+1. `/estate-bootstrap-analysis` — federate the three graphs and complete the three
+   cross-estate reports
+2. `/estate-impact-analysis` — the blast radius of one change in every estate at once
+3. `/estate-cutover-sequence` — the derived modernisation order, and what must be
+   decided before it means anything
+4. `/estate-neo4j-queries` — load the federated graph and answer with Cypher
 
 The contract Copilot works under: run the tool, cite the artefact (`file path` + `node id` +
 the command that produced the claim), fill only `<!-- LLM: … -->` slots in generated
@@ -575,11 +730,13 @@ README.md                        This document — the only prose documentation
 AGENTS.md                        Short agent contract, read by Copilot and other agents
 .github/
   copilot-instructions.md        Repo-wide Copilot rules
-  instructions/                  Path-scoped rules for TIBCO and APEX source artefacts
-  prompts/                       Task prompt files (TIBCO and APEX)
-  chatmodes/                     Chat modes (TIBCO and APEX)
+  instructions/                  Path-scoped rules, one per estate plus the federation
+  prompts/                       Task prompt files (TIBCO, APEX, Oracle, cross-estate)
+  chatmodes/                     Chat modes (TIBCO, APEX, Oracle, cross-estate)
   skills/tibco-analyst/          The TIBCO skill: SKILL.md + six reference guides
   skills/apex-analyst/           The APEX skill: SKILL.md + four reference guides
+  skills/oracle-analyst/         The Oracle PL/SQL skill
+  skills/estate-analyst/         The cross-estate skill
                                  — the ONLY editable copies of the skills
 tools/analyzer_core/             Dialect-agnostic core, shared by both analyzers
   model.py                       Graph, GraphNode, GraphRel (the deterministic artefact)
@@ -607,6 +764,13 @@ tools/apex_analyzer/             Oracle APEX analyzer (see docs/APEX_README.md)
   diagrams/  report/             Mermaid/PlantUML, reports and context packs
   extract/                       Read-only SQL kit for the Oracle dictionary extract
   cli.py                         `apex-analyze`
+tools/estate_analyzer/           Cross-estate wrapper (see docs/ESTATE_ANALYZER_SPEC.md)
+  federate.py                    Loads the three graphs, namespaces ids, merges db: nodes
+  links.py                       The TIBCO-to-database matcher and the confidence ladder
+  analysis/                      Inventory, cross-estate rules, modernisation sequence
+  graph/                         Federated Neo4j schema, cookbook, validation rules
+  diagrams/  report/             Mermaid, context packs and report scaffolds
+  cli.py                         `estate-analyze`
 tools/tibco_analyzer/
   analyzer.py                    Orchestrates the parse
   parsers/                       .process, .xsd/.aeschema, .wsdl, shared resources,
@@ -623,13 +787,19 @@ tests/
                                  overload, dynamic SQL, an unresolvable call
   fixtures/tibco/                One BW5 and one BW6 module, since the two generations
                                  share almost no file conventions
+  fixtures/estate/               The cross-estate fixture: a mapped BW6 module, an
+                                 unmapped BW5 one, a near-miss table name, a runtime-SQL
+                                 activity, the estate map and the expected join
   test_apex_analyzer.py          End-to-end APEX tests (determinism, rules, export)
   test_oracle_analyzer.py        End-to-end Oracle tests (overloads, lineage, coverage)
   test_tibco_analyzer.py         End-to-end TIBCO tests, both generations
   test_sql_binder.py             The SQL/PL-SQL binder corpus — the quality net
+  test_estate_analyzer.py        The three fixtures federated: the join, its confidence
+                                 ladder, its coverage gates and its blind spots
 docs/
   APEX_README.md                 APEX quick start, command reference and gate contract
   ORACLE_ANALYZER_SPEC.md        Oracle graph model, id grammar, coverage contract
+  ESTATE_ANALYZER_SPEC.md        Federation: node identity, confidence, estate map, gates
 scripts/
   push_to_neo4j.py               Loads the neo4j_* export into a running Neo4j over Bolt
 .env.example                     Template for Neo4j connection settings (copy to .env)

@@ -69,6 +69,31 @@ class ResourceParserMixin:
         return mapping.get('type', 'UNKNOWN'), mapping.get('tech', 'Unknown'), \
             mapping.get('spring', 'Unknown')
 
+    # Attribute and element names that hold a credential rather than point at
+    # one. Their *presence* is recorded; their value never is.
+    _CREDENTIAL_KEYS = ('password', 'passwd', 'secret', 'credential',
+                        'apikey', 'api_key', 'token')
+
+    @classmethod
+    def _has_embedded_credential(cls, root) -> bool:
+        """Whether the resource file carries a credential inline.
+
+        TIBCO's `#!` obfuscation is reversible, so an obfuscated password in
+        source control is still a credential in source control. The flag is
+        recorded so the rule catalogue can raise it; the value is never copied
+        into the graph.
+        """
+        if root is None:
+            return False
+        for element in root.iter():
+            tag = element.tag.split('}')[-1].lower()
+            if tag in cls._CREDENTIAL_KEYS and (element.text or '').strip():
+                return True
+            for name, value in element.attrib.items():
+                if name.split('}')[-1].lower() in cls._CREDENTIAL_KEYS                         and str(value).strip():
+                    return True
+        return False
+
     @staticmethod
     def _is_bw6_resource(root) -> bool:
         return root is not None and root.tag.split('}')[-1] == 'namedResource'
@@ -154,6 +179,7 @@ class ResourceParserMixin:
                     host, port_val, url, driver = self._bw5_details(root)
             else:
                 host = port_val = url = driver = ''
+            has_credential = self._has_embedded_credential(root)
 
             res_id = self._next_id('res')
             rel_path = str(rf.relative_to(self.tibco_root)).replace('\\', '/')
@@ -171,6 +197,7 @@ class ResourceParserMixin:
                 'filePath': rel_path,
                 'qualifiedName': qualified_name,
                 'bwVersion': 'BW6' if is_bw6 else 'BW5',
+                'hasEmbeddedCredential': has_credential,
             }))
 
             # Index by every fragment a process might use to refer to it.

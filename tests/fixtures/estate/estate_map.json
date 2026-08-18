@@ -1,0 +1,10 @@
+{
+  "description": "Operator-declared mapping from TIBCO JDBC shared resources to Oracle schemas. A JDBC URL names a database, not a schema, so the wrapper never infers this. See docs/ESTATE_ANALYZER_SPEC.md section 5.",
+  "datasources": [
+    {
+      "resource": "sync.OrderApp_JDBCConnectionResource",
+      "schema": "ORDER_APP",
+      "note": "orders-db.internal:1521/ORDERS is served by the ORDER_APP schema"
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Deliberately absent from estate_map.json: an unmapped datasource is
+     finding XE-005, and every activity behind it must land in the unbound
+     list rather than being guessed onto a schema. -->
+<repository xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <jdbcConfiguration>
+    <location>jdbc:oracle:thin:@legacy-db.internal:1521/LEGACY</location>
+    <driver>oracle.jdbc.OracleDriver</driver>
+    <Host>legacy-db.internal</Host>
+    <Port>1521</Port>
+    <username>legacy_feed</username>
+    <password>#!LEGACYOBFUSCATEDPASSWORD</password>
+  </jdbcConfiguration>
+</repository>

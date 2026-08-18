@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    The unmapped half of the cross-estate fixture.
+
+    `orders` is a real table in the database estate, but this module's
+    datasource has no estate-map entry, so the owner is unknown. The bare name
+    matches exactly one object in one schema, which makes it a `name` match:
+    suppressed by default, admitted only when the operator passes the
+    allow-name-match flag. That is the behaviour the fixture exists to pin down.
+-->
+<pd:ProcessDefinition xmlns:pd="http://xmlns.tibco.com/bw/process/2003"
+    xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+    <pd:name>legacy/OrderFeed.process</pd:name>
+    <pd:targetNamespace>http://xmlns.example.com/legacy/OrderFeed</pd:targetNamespace>
+
+    <pd:starter name="FeedTimer">
+        <pd:type>com.tibco.plugin.timer.TimerEventSource</pd:type>
+        <config>
+            <TimeInterval>900000</TimeInterval>
+        </config>
+    </pd:starter>
+
+    <pd:activity name="FeedQuery">
+        <pd:type>com.tibco.plugin.jdbc.JDBCQueryActivity</pd:type>
+        <config>
+            <JDBCSharedConfig>/SharedResources/LegacyFeed.sharedjdbc</JDBCSharedConfig>
+            <statement>SELECT order_id, status_code FROM orders WHERE status_code = 'NEW'</statement>
+        </config>
+    </pd:activity>
+
+    <pd:transition>
+        <pd:from>FeedTimer</pd:from>
+        <pd:to>FeedQuery</pd:to>
+    </pd:transition>
+</pd:ProcessDefinition>

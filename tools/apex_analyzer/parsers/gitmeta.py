@@ -16,7 +16,7 @@ import subprocess
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from analyzer_core.ids import commit_id, file_id
+from analyzer_core.ids import commit_id, file_id, repository_id
 
 logger = logging.getLogger('apex_analyzer')
 
@@ -51,7 +51,7 @@ class GitMetadataMixin:
         head = (_run(['git', 'rev-parse', 'HEAD'], root) or '').strip()
         repo_name = remote.rstrip('/').rsplit('/', 1)[-1] or root.name
 
-        repo_node = f'repo:{repo_name}'
+        repo_node = repository_id(repo_name)
         self._node(repo_node, 'Repository', repo_name,
                    {'remote': remote, 'defaultBranch': branch})
         branch_node = f'branch:{repo_name}:{branch or "HEAD"}'

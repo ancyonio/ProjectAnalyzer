@@ -5,13 +5,13 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "tibco-analyzer"
 version = "1.1.0"
-description = "Deterministic legacy-estate analysis: TIBCO BusinessWorks, Oracle APEX and Oracle PL/SQL knowledge graphs, semantic search, blast radius, data lineage, architecture diagrams and LLM context packs."
+description = "Deterministic legacy-estate analysis: TIBCO BusinessWorks, Oracle APEX and Oracle PL/SQL knowledge graphs, cross-estate federation, semantic search, blast radius, data lineage, architecture diagrams and LLM context packs."
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }
 keywords = ["tibco", "businessworks", "oracle-apex", "apex", "oracle", "plsql",
             "neo4j", "migration", "spring-boot", "static-analysis",
-            "knowledge-graph", "data-lineage"]
+            "knowledge-graph", "data-lineage", "cross-estate"]
 classifiers = [
     "Programming Language :: Python :: 3",
     "Topic :: Software Development :: Quality Assurance",
@@ -34,13 +34,16 @@ dev = ["pytest>=7.0"]
 tibco-analyze = "tibco_analyzer.cli:main"
 apex-analyze = "apex_analyzer.cli:main"
 oracle-analyze = "oracle_analyzer.cli:main"
+# Reads the three graphs the commands above produce; parses no source.
+estate-analyze = "estate_analyzer.cli:main"
 
 [tool.setuptools]
 package-dir = { "" = "tools" }
 
 [tool.setuptools.packages.find]
 where = ["tools"]
-include = ["analyzer_core*", "tibco_analyzer*", "apex_analyzer*", "oracle_analyzer*"]
+include = ["analyzer_core*", "tibco_analyzer*", "apex_analyzer*",
+           "oracle_analyzer*", "estate_analyzer*"]
 
 [tool.setuptools.package-data]
 apex_analyzer = ["extract/*.sql", "extract/*.md", "*.json"]

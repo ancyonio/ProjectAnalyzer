@@ -1,0 +1,87 @@
+{
+  "description": "Hand-written expectation for the cross-estate join over tests/fixtures/estate/tibco + tests/fixtures/apex + tests/fixtures/oracle, with tests/fixtures/estate/estate_map.json. Written before the matcher, so a matcher that becomes more eager fails a test rather than quietly inflating coverage. See docs/ESTATE_ANALYZER_SPEC.md section 10.",
+  "links": [
+    {
+      "from": "OrderApp_JDBCConnectionResource",
+      "rel": "CONNECTS_TO_SCHEMA",
+      "to": "ORDER_APP",
+      "basis": "declared",
+      "why": "the operator declared this datasource serves ORDER_APP; a JDBC url names a database, not a schema"
+    },
+    {
+      "from": "ReadCustomers",
+      "rel": "READS_FROM",
+      "to": "CUSTOMERS",
+      "basis": "qualified-name",
+      "why": "the SQL qualifies the table itself: ORDER_APP.CUSTOMERS"
+    },
+    {
+      "from": "WriteOrderLines",
+      "rel": "INSERTS_INTO",
+      "to": "ORDER_LINES",
+      "basis": "qualified-name",
+      "why": "unqualified in the SQL; the owner comes from the mapped datasource"
+    },
+    {
+      "from": "WriteOrderLines",
+      "rel": "WRITES_TO",
+      "to": "ORDER_LINES",
+      "basis": "qualified-name",
+      "why": "the roll-up edge that always accompanies a write verb"
+    },
+    {
+      "from": "WriteAuditLog",
+      "rel": "INSERTS_INTO",
+      "to": "AUDIT_LOG",
+      "basis": "qualified-name",
+      "why": "unqualified in the SQL; the owner comes from the mapped datasource"
+    },
+    {
+      "from": "WriteAuditLog",
+      "rel": "WRITES_TO",
+      "to": "AUDIT_LOG",
+      "basis": "qualified-name",
+      "why": "the roll-up edge that always accompanies a write verb"
+    }
+  ],
+  "suppressedByDefault": [
+    {
+      "from": "FeedQuery",
+      "rel": "READS_FROM",
+      "to": "ORDERS",
+      "basis": "name",
+      "why": "the LegacyFeed datasource is unmapped, so only the bare name matched; admitted only under allow-name-match"
+    }
+  ],
+  "unbound": [
+    {
+      "activity": "ReadNearMiss",
+      "table": "ORDER_LINE",
+      "reason": "no-such-object",
+      "why": "singular near-miss for ORDER_LINES; a matcher that normalises too eagerly would bind it"
+    },
+    {
+      "activity": "DirectSql",
+      "reason": "no-static-sql",
+      "why": "SQLDirect builds its statement at runtime; invisible by design, and recorded rather than dropped"
+    }
+  ],
+  "datasources": [
+    { "name": "OrderApp_JDBCConnectionResource", "mapped": true, "schema": "ORDER_APP" },
+    { "name": "LegacyFeed", "mapped": false, "schema": "" }
+  ],
+  "coverage": {
+    "jdbcActivities": 6,
+    "jdbcActivitiesWithSql": 5,
+    "jdbcActivitiesBound": 3,
+    "sqlBindCoverage": 60.0,
+    "noStaticSqlSites": 1,
+    "datasources": 2,
+    "datasourcesMapped": 1,
+    "datasourceCoverage": 50.0
+  },
+  "crossEstateRules": ["XE-001", "XE-002", "XE-003", "XE-005", "XE-006", "XE-007"],
+  "rulesThatMustNotFire": {
+    "XE-004": "no statement digest is shared between the APEX and Oracle fixtures, so a duplicate finding here would be a false positive"
+  }
+}

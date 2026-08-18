@@ -2,6 +2,7 @@
 
     tibco-analyze analyze   --source <tibco_root> [--output <dir>]
     tibco-analyze validate  [--strict]
+    tibco-analyze rules     [--category SECURITY] [--min-severity HIGH]
     tibco-analyze index     [--no-embeddings] [--provider auto|sentence-transformers|openai|azure-openai]
     tibco-analyze search    "<question>" [--label BWProcess] [--module M] [--top 10] [--json]
     tibco-analyze impact    --target "XSD:Order.xsd" [--depth 4] [--direction upstream]
@@ -26,12 +27,17 @@ from typing import Any, Dict, List, Optional
 
 from .analysis.impact import ImpactAnalyzer, render_markdown as impact_markdown
 from .analysis.impact import render_mermaid as impact_mermaid
-from .analysis.inventory import full_inventory
+from .analysis.inventory import full_inventory, issues_summary
 from .analyzer import TibcoAnalyzer
+from .constants import SEVERITY_ORDER
 from .diagrams import mermaid, plantuml
-from .graph.exporters import Neo4jExporter
+from analyzer_core.graph.exporters import Neo4jExporter
+from analyzer_core.graph.validate import GraphValidator
+from analyzer_core.graph.validate import render_markdown as validation_markdown
+
 from .graph.queries import render_cookbook, render_markdown as queries_markdown
-from .graph.validate import GraphValidator, render_markdown as validation_markdown
+from .graph.schema import neo4j_schema, validation_config
+from .graph.summary import write_analysis_summary
 from .model import Graph
 from .report.contextpack import ContextPackBuilder
 from .report.reports import generate_reports
@@ -93,7 +99,8 @@ def cmd_analyze(args: argparse.Namespace) -> int:
     graph = analyzer.analyze()
     graph.save(output_dir / GRAPH_FILE)
 
-    files = Neo4jExporter(graph, output_dir).write_all()
+    files = Neo4jExporter(graph, output_dir, neo4j_schema()).write_all()
+    files['analysis_summary'] = str(write_analysis_summary(graph, output_dir))
     _write(output_dir / 'analysis_queries.cypher', render_cookbook())
     _write(output_dir / 'ANALYSIS_QUERIES.md', queries_markdown())
 
@@ -120,7 +127,7 @@ def cmd_analyze(args: argparse.Namespace) -> int:
 def cmd_validate(args: argparse.Namespace) -> int:
     output_dir = Path(args.output)
     graph = _load_graph(output_dir)
-    result = GraphValidator(graph, output_dir).run()
+    result = GraphValidator(graph, validation_config(output_dir), output_dir).run()
     _write(output_dir / 'validation_report.md', validation_markdown(result))
     _write(output_dir / 'validation_report.json', json.dumps(result, indent=2))
 
@@ -133,6 +140,48 @@ def cmd_validate(args: argparse.Namespace) -> int:
         return 2
     if args.strict and result['status'] == 'WARN':
         return 2
+    return 0
+
+
+def cmd_rules(args: argparse.Namespace) -> int:
+    output_dir = Path(args.output)
+    graph = _load_graph(output_dir)
+    summary = issues_summary(graph)
+
+    minimum = SEVERITY_ORDER.index(args.min_severity) if args.min_severity else 0
+    findings = [f for f in summary['findings']
+                if f['severity'] in SEVERITY_ORDER
+                and SEVERITY_ORDER.index(f['severity']) >= minimum
+                and (not args.category or f['category'] == args.category)
+                and (not args.rule or f['ruleId'] == args.rule)
+                and (not args.module or f['module'] == args.module)]
+
+    shown = {severity: sum(1 for f in findings if f['severity'] == severity)
+             for severity in SEVERITY_ORDER}
+    shown = {severity: n for severity, n in shown.items() if n}
+    suppressed = len(summary['findings']) - len(findings)
+
+    if args.json:
+        print(json.dumps({'total': len(findings), 'bySeverity': shown,
+                          'totalBeforeFilter': len(summary['findings']),
+                          'suppressedByFilter': suppressed,
+                          'findings': findings}, indent=2))
+    else:
+        print(f'\n{len(findings)} finding(s)\n')
+        for finding in findings:
+            where = f" ({finding['filePath']})" if finding['filePath'] else ''
+            print(f"  [{finding['severity']:<8}] {finding['ruleId']}: "
+                  f"{finding['description']}{where}")
+        print('\nBy severity:', shown)
+        if suppressed:
+            print(f'({suppressed} further finding(s) hidden by the active '
+                  f"filter; {len(summary['findings'])} in the graph)")
+
+    if args.fail_on and args.fail_on in SEVERITY_ORDER:
+        threshold = SEVERITY_ORDER.index(args.fail_on)
+        if any(SEVERITY_ORDER.index(f['severity']) >= threshold
+               for f in findings if f['severity'] in SEVERITY_ORDER):
+            return 2
     return 0
 
 
@@ -319,6 +368,17 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser('validate', help='Validate graph integrity (CI gate)')
     p.add_argument('--strict', action='store_true', help='Treat warnings as failures')
     p.set_defaults(func=cmd_validate)
+
+    p = sub.add_parser('rules', help='Rule findings')
+    p.add_argument('--category', choices=['SECURITY', 'CORRECTNESS',
+                                          'PERFORMANCE', 'TECH_DEBT'])
+    p.add_argument('--rule', help='Single rule id, e.g. SEC-001')
+    p.add_argument('--module', help='Restrict to one module')
+    p.add_argument('--min-severity', default='LOW', choices=SEVERITY_ORDER)
+    p.add_argument('--fail-on', choices=SEVERITY_ORDER,
+                   help='Exit 2 when a finding at or above this severity exists')
+    p.add_argument('--json', action='store_true')
+    p.set_defaults(func=cmd_rules)
 
     p = sub.add_parser('index', help='Build the semantic search index')
     p.add_argument('--source', '-s', help='TIBCO root (defaults to the analysed root)')

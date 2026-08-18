@@ -3,6 +3,7 @@
 Ported from the original single-file analyzer, extended with search synonyms,
 relationship direction semantics and risk weights used by the impact engine.
 """
+import re
 from typing import Dict
 
 # TIBCO BW XML namespaces
@@ -560,3 +561,117 @@ COMPLEXITY_TIERS = [
 ]
 
 SCHEMA_VERSION = '1.0.0'
+
+# ─────────────────────────────────────────────────────────────
+# Graph vocabulary and physical model
+#
+# One catalogue, consumed by `graph/schema.py`, which turns it into the Neo4j
+# export schema and the validation configuration. This is the same arrangement
+# the APEX and Oracle analyzers use, so all three now configure the shared
+# engines in `analyzer_core.graph` rather than forking them.
+# ─────────────────────────────────────────────────────────────
+PROCESS_LABELS = {'Module', 'BWProcess', 'Activity', 'Group', 'ErrorHandler'}
+
+SCHEMA_LABELS = {'XSD', 'Element', 'ComplexType', 'AESchema', 'DataTransformation'}
+
+SERVICE_LABELS = {'Service', 'Operation'}
+
+RESOURCE_LABELS = {'SharedResource', 'Adapter', 'System', 'GlobalVariable'}
+
+ANALYSIS_LABELS = {'Issue', 'Recommendation', 'ExternalReference'}
+
+KNOWN_LABELS = (PROCESS_LABELS | SCHEMA_LABELS | SERVICE_LABELS
+                | RESOURCE_LABELS | ANALYSIS_LABELS)
+
+STRUCTURAL_RELS = {'BELONGS_TO', 'EXECUTES', 'CONTAINS', 'HAS_GROUP',
+                   'HANDLES_ERROR', 'CONFIGURED_BY', 'CONFIGURES'}
+
+FLOW_RELS = {'TRANSITIONS_TO', 'CALLS', 'CALLS_EXTERNAL', 'EXPOSES'}
+
+DEPENDENCY_RELS = {'USES_XSD', 'USES_WSDL', 'IMPORTS_SCHEMA', 'REFERENCES',
+                   'DEPENDS_ON', 'CONNECTS_TO'}
+
+ANALYSIS_RELS = {'HAS_ISSUE', 'HAS_RECOMMENDATION', 'AFFECTS'}
+
+KNOWN_REL_TYPES = (STRUCTURAL_RELS | FLOW_RELS | DEPENDENCY_RELS | ANALYSIS_RELS)
+
+# Without these the parse did not do its job.
+REQUIRED_REL_TYPES = {'BELONGS_TO', 'EXECUTES', 'CONTAINS'}
+
+# Present in a typical estate. Their absence is a warning, not an error: it can
+# mean the estate is simple, or that the parser does not model them yet, and
+# the artifact-coverage rule is what tells those two apart.
+EXPECTED_REL_TYPES = {'USES_XSD', 'CALLS', 'TRANSITIONS_TO', 'HANDLES_ERROR',
+                      'REFERENCES', 'EXPOSES', 'IMPORTS_SCHEMA'}
+
+# Labels allowed to have no edges at all.
+ORPHAN_TOLERANT_LABELS = {'System', 'GlobalVariable', 'DataTransformation',
+                          'AESchema', 'ExternalReference'}
+
+INT_FIELDS = {'activityCount', 'transitionCount', 'errorHandlerCount',
+              'elementCount', 'complexTypeCount', 'simpleTypeCount',
+              'importCount', 'operationCount', 'schemaRefCount', 'wsdlRefCount',
+              'processVarCount', 'groupCount', 'order', 'fieldCount',
+              'lineStart'}
+
+FLOAT_FIELDS = {'complexityScore', 'confidence'}
+
+BOOL_FIELDS = {'required', 'multiple', 'deployable', 'serviceSettable',
+               'isStarter', 'hasEmbeddedCredential'}
+
+COMPOSITE_CONSTRAINTS = [
+    ('BWProcess', ['module', 'name']),
+]
+
+SECONDARY_INDEXES = [
+    ('BWProcess', ['module']),
+    ('BWProcess', ['tier']),
+    ('BWProcess', ['entryType']),
+    ('Activity', ['category']),
+    ('Activity', ['processRef']),
+    ('SharedResource', ['resourceType']),
+    ('SharedResource', ['qualifiedName']),
+    ('Adapter', ['technology']),
+    ('XSD', ['module']),
+    ('Issue', ['ruleId']),
+    ('Issue', ['severity']),
+]
+
+FULLTEXT_INDEXES = [
+    ('tibco_name_ft', ['BWProcess', 'Activity', 'Service', 'Operation',
+                       'SharedResource', 'XSD'], ['name']),
+    ('tibco_sql_ft', ['Activity'], ['sqlStatement']),
+]
+
+ID_PATTERN = re.compile(r'^[A-Za-z0-9_.:#$/@ -]+$')
+
+# Blast radius: how strongly a change travels along each edge.
+REL_IMPACT_WEIGHTS = {
+    'CALLS': 1.0,
+    'EXECUTES': 0.9,
+    'EXPOSES': 0.9,
+    'REFERENCES': 0.8,
+    'USES_XSD': 0.7,
+    'USES_WSDL': 0.7,
+    'CONFIGURED_BY': 0.7,
+    'IMPORTS_SCHEMA': 0.6,
+    'TRANSITIONS_TO': 0.6,
+    'HAS_GROUP': 0.5,
+    'HANDLES_ERROR': 0.5,
+    'CONTAINS': 0.4,
+    'CONFIGURES': 0.4,
+    'CONNECTS_TO': 0.3,
+}
+
+IMPACT_EXCLUDED_RELS = {'BELONGS_TO', 'HAS_ISSUE', 'AFFECTS',
+                        'HAS_RECOMMENDATION'}
+
+MULTIPLIERS = {
+    'BWProcess': 2.5, 'Service': 2.2, 'Operation': 2.0, 'Activity': 1.0,
+    'SharedResource': 1.0, 'XSD': 0.8, 'Adapter': 0.6, 'Group': 0.4,
+    'ErrorHandler': 0.4, 'Element': 0.2, 'ComplexType': 0.2,
+    'Issue': 0.0, 'Recommendation': 0.0,
+}
+
+# Finding severities, weakest first, so a filter is an index comparison.
+SEVERITY_ORDER = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']

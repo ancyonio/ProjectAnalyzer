@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    `value` is a string here and a number in the Oracle analyzer's CodeMetric.
+    One property name, two types, two dialects. The federated schema therefore
+    cannot type it at all, and this fixture is what stops someone typing it:
+    without a string-valued global variable in the estate fixture, the
+    AX-TYPES check has nothing to fail on and the mistake reaches a real
+    estate instead.
+-->
+<repo:repository xmlns:repo="http://www.tibco.com/xmlns/repo/types/2002">
+  <globalVariables>
+    <globalVariable>
+      <name>OrderSyncSchedule</name>
+      <value>0 0/15 * * * ?</value>
+      <type>String</type>
+      <deploymentSettable>true</deploymentSettable>
+      <serviceSettable>false</serviceSettable>
+    </globalVariable>
+  </globalVariables>
+</repo:repository>

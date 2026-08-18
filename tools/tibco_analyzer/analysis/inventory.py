@@ -9,7 +9,8 @@ from __future__ import annotations
 from collections import Counter, defaultdict
 from typing import Any, Dict, List, Set
 
-from ..constants import ENTRY_POINT_CATEGORIES, EXTERNAL_CALL_CATEGORIES
+from ..constants import (ENTRY_POINT_CATEGORIES, EXTERNAL_CALL_CATEGORIES,
+                         SEVERITY_ORDER)
 from ..model import Graph, GraphNode
 
 
@@ -343,3 +344,52 @@ def full_inventory(graph: Graph) -> Dict[str, Any]:
         'errorHandlingGaps': error_handling_gaps(graph),
         'migrationSequence': migration_sequence(graph),
     }
+
+
+def issues_summary(graph: Graph) -> Dict[str, Any]:
+    """The rule findings, with their recommendation attached.
+
+    Same shape as the APEX and Oracle summaries, so one reader serves all
+    three and the cross-estate wrapper can merge the ledgers.
+    """
+    findings: List[Dict[str, Any]] = []
+    for issue in graph.by_label('Issue'):
+        recommendation = ''
+        for rel in graph.outgoing(issue.node_id):
+            if rel.rel_type == 'HAS_RECOMMENDATION' and rel.end_id in graph.nodes:
+                recommendation = str(graph.nodes[rel.end_id].properties.get('text', ''))
+                break
+        findings.append({
+            'ruleId': str(issue.properties.get('ruleId', '')),
+            'severity': str(issue.properties.get('severity', '')),
+            'category': str(issue.properties.get('category', '')),
+            'description': str(issue.properties.get('description', '')),
+            'targetLabel': str(issue.properties.get('targetLabel', '')),
+            'targetName': str(issue.properties.get('targetName', '')),
+            'module': str(issue.properties.get('module', '')),
+            'filePath': str(issue.properties.get('filePath', '')),
+            'recommendation': recommendation,
+            'nodeId': issue.node_id,
+        })
+    findings.sort(key=lambda f: (-_severity_rank(f['severity']), f['ruleId'],
+                                 f['targetName']))
+
+    by_severity: Dict[str, int] = {}
+    by_category: Dict[str, int] = {}
+    for finding in findings:
+        by_severity[finding['severity']] = by_severity.get(finding['severity'], 0) + 1
+        by_category[finding['category']] = by_category.get(finding['category'], 0) + 1
+    return {
+        'total': len(findings),
+        'bySeverity': {s: by_severity[s] for s in reversed(SEVERITY_ORDER)
+                       if by_severity.get(s)},
+        'byCategory': dict(sorted(by_category.items())),
+        'findings': findings,
+    }
+
+
+def _severity_rank(severity: str) -> int:
+    try:
+        return SEVERITY_ORDER.index(severity)
+    except ValueError:
+        return -1

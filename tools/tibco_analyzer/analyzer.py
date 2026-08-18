@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Set, Tuple
 
+from .analysis.rules_catalog import apply_rules
 from .constants import (ARTIFACT_FAMILIES, PARSED_ARTIFACT_EXTENSIONS,
                         SCHEMA_VERSION)
 from .model import Graph, GraphNode, GraphRel
@@ -183,8 +184,15 @@ class TibcoAnalyzer(
             logger.info("-- Step %d/%d: %s --", idx, len(steps), label)
             fn()
 
+        # Rules run last: every one of them reads the finished graph, so a rule
+        # can never see a half-built estate and report a gap the parser was
+        # about to fill.
+        issue_count = apply_rules(self)
+        logger.info("-- Rules: %d finding(s) --", issue_count)
+
         meta = {
             'schemaVersion': SCHEMA_VERSION,
+            'issueCount': issue_count,
             'generatedAt': datetime.now(timezone.utc).isoformat(),
             'tibcoRoot': str(self.tibco_root),
             'fileDiscovery': dict(self.file_counts.most_common()),
