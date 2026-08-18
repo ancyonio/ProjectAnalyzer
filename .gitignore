@@ -19,3 +19,9 @@ analysis_output_oracle/
 .env
 .env.*
 !.env.example
+
+#
+.context/
+.tokengraph/
+
+docs/
