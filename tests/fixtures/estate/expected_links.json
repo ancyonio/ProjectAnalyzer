@@ -1,5 +1,5 @@
 {
-  "description": "Hand-written expectation for the cross-estate join over tests/fixtures/estate/tibco + tests/fixtures/apex + tests/fixtures/oracle, with tests/fixtures/estate/estate_map.json. Written before the matcher, so a matcher that becomes more eager fails a test rather than quietly inflating coverage. See docs/ESTATE_ANALYZER_SPEC.md section 10.",
+  "description": "Hand-written expectation for the cross-estate join over tests/fixtures/estate/tibco + tests/fixtures/apex + tests/fixtures/oracle, with tests/fixtures/estate/estate_map.json. Written before the matcher, so a matcher that becomes more eager fails a test rather than quietly inflating coverage. See README.md#cross-estate-analysis.",
   "links": [
     {
       "from": "OrderApp_JDBCConnectionResource",

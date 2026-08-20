@@ -12,7 +12,7 @@ another -- true. The cost is that a dialect which adds a label must add it here
 too; the benefit is that the validator says so loudly (`AX-VOCAB`) instead of
 the wrapper silently importing a shape it does not understand.
 
-See docs/ESTATE_ANALYZER_SPEC.md.
+See README.md#cross-estate-analysis.
 """
 from __future__ import annotations
 

@@ -25,3 +25,5 @@ analysis_output_oracle/
 .tokengraph/
 
 docs/
+
+sample_data/

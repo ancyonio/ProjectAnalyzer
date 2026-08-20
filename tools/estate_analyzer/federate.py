@@ -8,7 +8,7 @@ The one decision that matters is node identity. Every imported id is prefixed
 with its estate (`tibco:act_0007`, `apex:app100:p20`) except the `db:` family,
 which is left alone so the APEX and Oracle views of one table become one node.
 That merge is the entire reason the three analyzers share
-`analyzer_core.ids`; see docs/ESTATE_ANALYZER_SPEC.md section 2.
+`analyzer_core.ids`; see README.md#the-two-halves-of-the-join.
 """
 from __future__ import annotations
 

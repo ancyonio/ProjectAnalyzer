@@ -32,7 +32,7 @@ dialects share code only through the core.
 `READS_FROM`, `HAS_UNIT` and the rest mean the same thing in both graphs, so the same Cypher
 answers either. Never introduce a second spelling for a concept that already has one.
 
-For APEX work, read [docs/APEX_README.md](docs/APEX_README.md) and follow the
+For APEX work, read [README.md](README.md#oracle-apex-analysis) and follow the
 `apex-analyst` skill; everything below applies to both analyzers unless it says otherwise.
 
 The two layers, in either estate:
@@ -97,7 +97,7 @@ PYTHONPATH=tools python -m apex_analyzer -o analysis_output_apex rules --categor
 ```
 
 Subcommands: `analyze`, `validate`, `rules`, `impact`, `diagrams`, `context`, `report`,
-`queries`, `diff`, `all`. Full reference: [docs/APEX_README.md](docs/APEX_README.md).
+`queries`, `diff`, `all`. Full reference: [README.md](README.md#oracle-apex-analysis).
 
 ### Oracle PL/SQL
 
@@ -131,7 +131,7 @@ PYTHONPATH=tools python -m estate_analyzer -o analysis_output_estate impact \
 
 Subcommands: `federate`, `validate`, `links`, `inventory`, `findings`, `impact`,
 `sequence`, `diagrams`, `context`, `report`, `queries`, `all`. Specification:
-[docs/ESTATE_ANALYZER_SPEC.md](docs/ESTATE_ANALYZER_SPEC.md).
+[README.md](README.md#cross-estate-analysis).
 
 **Four cross-estate rules.** Never state a cross-estate dependency without its `basis`
 and `confidence`: `exact` needed no heuristic, `name` is a bare-name guess at 0.5 that

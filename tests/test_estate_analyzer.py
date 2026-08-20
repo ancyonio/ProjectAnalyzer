@@ -1,4 +1,4 @@
-"""Tests for the estate analyzer (docs/ESTATE_ANALYZER_SPEC.md section 10).
+"""Tests for the estate analyzer (README.md#cross-estate-analysis).
 
 Run with `pytest tests`, or directly with
 `python tests/test_estate_analyzer.py` (no pytest needed for the direct path).

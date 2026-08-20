@@ -74,7 +74,7 @@ Everything else reads `analysis_output_estate/graph.json`.
 
 Subcommands: `federate`, `validate`, `links`, `inventory`, `findings`, `impact`,
 `sequence`, `diagrams`, `context`, `report`, `queries`, `all`. Full
-specification: [docs/ESTATE_ANALYZER_SPEC.md](../../../docs/ESTATE_ANALYZER_SPEC.md).
+specification: [README.md](../../../README.md#cross-estate-analysis).
 
 ## The estate map
 

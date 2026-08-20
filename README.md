@@ -14,14 +14,13 @@ a language model — they are parsed from the source tree, exported to CSV/Cyphe
 checked by a built-in validation gate. Copilot reads that output and does what it is
 genuinely good at: interpretation, prioritisation and narrative.
 
-> **Also here: Oracle.** The same two-layer approach, the same graph model and the same Neo4j
-> delivery cover two Oracle estates as well:
+> **Also here: Oracle.** The same two-layer approach, shared core and Neo4j delivery cover
+> two Oracle estates as well:
 >
-> - **Oracle APEX applications** — `tools/apex_analyzer`, `apex-analyze`.
->   See **[APEX analysis](docs/APEX_README.md)**.
+> - **Oracle APEX applications** — `tools/apex_analyzer`, `apex-analyze`. See
+>   **[Oracle APEX analysis](#oracle-apex-analysis)**.
 > - **Oracle PL/SQL in a repository** — `tools/oracle_analyzer`, `oracle-analyze`: packages
 >   split into spec and body, the call graph, column-aware data access and lineage.
->   See **[the specification](docs/ORACLE_ANALYZER_SPEC.md)**.
 >
 > The two Oracle analyzers share one database vocabulary — `DbTable`, `READS_FROM`,
 > `HAS_UNIT` mean the same thing in both graphs — so the same Cypher answers either.
@@ -32,8 +31,7 @@ genuinely good at: interpretation, prioritisation and narrative.
 > estate, which tables have more than one writer, and in what order a mixed estate should
 > be cut over. It is a **read-only wrapper** — it parses no source, imports nothing from
 > the three analyzers, and writes nothing into their output directories.
-> See **[Cross-estate analysis](#cross-estate-analysis)** and
-> **[the specification](docs/ESTATE_ANALYZER_SPEC.md)**.
+> See **[Cross-estate analysis](#cross-estate-analysis)**.
 
 ---
 
@@ -41,6 +39,7 @@ genuinely good at: interpretation, prioritisation and narrative.
 
 - [What it answers](#what-it-answers)
 - [Quick start](#quick-start)
+- [Oracle APEX analysis](#oracle-apex-analysis)
 - [Cross-estate analysis](#cross-estate-analysis)
 - [Preparing your source tree](#preparing-your-source-tree)
 - [Command reference](#command-reference)
@@ -94,6 +93,80 @@ Requires Python 3.9+ and no third-party packages. Optional extras:
 
 ---
 
+## Oracle APEX analysis
+
+The APEX analyzer builds a deterministic graph of applications, pages, regions, items,
+processes, shared components, SQL and PL/SQL, and the database objects they use. It supports
+split SQL exports (preferred), single-file exports, schema DDL committed alongside the
+application, and an optional database dictionary extract. Readable YAML exports are detected
+but are not parsed; use an SQL export instead. Both `wwv_flow_api.*` (APEX 21.1 and earlier)
+and `wwv_flow_imp*.*` (21.2 and later) are supported.
+
+### APEX quick start
+
+```bash
+# Optional but strongly recommended: extract deployed database metadata
+sql> @tools/apex_analyzer/extract/run_all.sql 100 ORDER_APP
+python tools/apex_analyzer/extract/merge_parts.py db_meta_parts.json db_meta.json
+
+# Run the complete pipeline over a split or single-file SQL export
+PYTHONPATH=tools python -m apex_analyzer -o analysis_output_apex all \
+  --source ./f100 --db-meta db_meta.json
+
+# Installed equivalent
+pip install -e .
+apex-analyze -o analysis_output_apex all --source ./f100 --db-meta db_meta.json
+```
+
+### APEX commands
+
+```text
+apex-analyze analyze   --source <export_root> [--app-id 100] [--schema ORDER_APP]
+                       [--db-meta db_meta.json] [--apex-meta apex_meta.json]
+                       [--git] [--git-range v1.2..HEAD]
+apex-analyze validate  [--strict]
+apex-analyze rules     [--category SECURITY] [--min-severity HIGH] [--fail-on CRITICAL]
+apex-analyze impact    --target "DbTable:ORDERS" [--direction upstream|downstream|both]
+                       [--depth 8] [--fail-on HIGH] [--save <path stem>]
+apex-analyze diagrams  [--format mermaid|plantuml|both]
+apex-analyze context | report | queries
+apex-analyze diff      --baseline <older graph.json>
+apex-analyze all       --source <export_root>
+```
+
+Exit codes are `0` for success, `1` for usage or runtime errors, and `2` for a gate
+failure. `analysis_output_apex/` contains `graph.json`, Neo4j CSV/Cypher and index metadata,
+the query cookbook, analysis summary, validation reports, context packs, report scaffolds,
+and generated Mermaid and PlantUML diagrams. Every command after `analyze` reads the graph,
+not the APEX export.
+
+### APEX coverage and validation
+
+`graph.meta.coverage.resolutionCoverage` is the share of SQL references resolved to modelled
+database objects. Below 80% the `AX-COVERAGE` gate warns and the graph is provisional.
+Unresolved references remain explicit `DbObject:Unresolved` nodes rather than disappearing.
+The validator also checks id grammar and uniqueness, relationship endpoints, vocabulary,
+containment, property types, provenance, unhandled export procedures, dependency mismatches,
+and unexpected orphan nodes. A FAIL means the graph is not trustworthy.
+
+The database layer can come from committed DDL or `--db-meta`; dictionary data outranks DDL
+because it describes the deployed database. Inferred edges carry a confidence and resolution
+basis. The analyzer has no live Oracle dependency, and APEX does not currently expose TIBCO's
+`search` or `index` commands.
+
+Verify APEX or shared SQL-binder changes with:
+
+```bash
+python tests/test_apex_analyzer.py
+python tests/test_sql_binder.py
+```
+
+The agent workflow lives in `.github/skills/apex-analyst/`, with the `apex-analyst`,
+`apex-impact`, and `apex-diagrammer` chat modes and the `/apex-bootstrap-analysis`,
+`/apex-impact-analysis`, `/apex-security-review`, and `/apex-neo4j-queries` prompts.
+
+---
+
 ## Cross-estate analysis
 
 The three analyzers each produce a complete graph of their own world. `estate-analyze`
@@ -131,6 +204,13 @@ JDBC resource behind the activity. Every one of those edges carries `origin`, `b
 `name` matches are **suppressed by default**. They are computed, counted and listed, and
 enter the graph only under `--allow-name-match`. A bare name matching two schemas is
 rejected whatever the flag says.
+
+Every non-database node id is prefixed by its estate (`tibco:`, `apex:`, or `oracle:`).
+Only natural-key `db:` ids remain unchanged so APEX and Oracle views of the same object can
+merge. Content-addressed `sql:`, `plsql:`, and `js:` nodes stay namespaced because merging
+them would hide duplicated statements. Merged database nodes record all contributing estates;
+property conflicts are retained with their resolution, while estate-specific measurements
+are kept as `<property>ByEstate` values.
 
 ### The estate map
 
@@ -177,6 +257,11 @@ different rules: `APEX.SEC-001` is SQL injection through dynamic SQL, `ORA.SEC-0
 dynamic SQL that defeats static resolution. Categories are canonicalised too, so APEX
 `TECH_DEBT` and Oracle `DEBT` are one category in the merged ledger.
 
+The federated vocabulary is the union of all three dialects plus `Estate`,
+`CONTAINS_ESTATE`, and `CONNECTS_TO_SCHEMA`. Cross-estate data access deliberately reuses
+`READS_FROM`, `INSERTS_INTO`, `UPDATES`, `DELETES_FROM`, and `WRITES_TO`, so one query works
+across all contributors.
+
 ### Worked examples
 
 ```bash
@@ -198,6 +283,10 @@ estate-analyze -o analysis_output_estate findings --category CROSS_ESTATE
 # CI gate: the federated graph must be trustworthy before anything is built on it
 estate-analyze -o analysis_output_estate validate --strict
 ```
+
+`federate` is the only command that reads upstream graphs. The full command surface is
+`federate`, `validate`, `links`, `inventory`, `findings`, `impact`, `sequence`, `diagrams`,
+`context`, `report`, `queries`, and `all`; exit codes follow the same `0`/`1`/`2` contract.
 
 ### Output
 
@@ -747,7 +836,7 @@ tools/analyzer_core/             Dialect-agnostic core, shared by both analyzers
   analysis/impact.py             Weighted blast-radius engine
   plsql/                         Shared Oracle source analysis used by the APEX and
                                  Oracle analyzers: SQL binder, PL/SQL blocks, DDL
-tools/oracle_analyzer/           Oracle PL/SQL analyzer (see docs/ORACLE_ANALYZER_SPEC.md)
+tools/oracle_analyzer/           Oracle PL/SQL analyzer
   analyzer.py                    Orchestrates the Oracle parse
   parsers/                       Source scan, DDL objects, packages and units,
                                  dictionary merge, git history, cross-reference
@@ -755,7 +844,7 @@ tools/oracle_analyzer/           Oracle PL/SQL analyzer (see docs/ORACLE_ANALYZE
   graph/                         Oracle Neo4j schema, Cypher cookbook, validation rules
   diagrams/  report/             Mermaid, reports and context packs
   cli.py                         `oracle-analyze`
-tools/apex_analyzer/             Oracle APEX analyzer (see docs/APEX_README.md)
+tools/apex_analyzer/             Oracle APEX analyzer
   analyzer.py                    Orchestrates the APEX parse
   parsers/                       Export tokenizer, page/region/item/process parsers,
                                  SQL and PL/SQL analysis, name resolution, DDL, git
@@ -764,7 +853,7 @@ tools/apex_analyzer/             Oracle APEX analyzer (see docs/APEX_README.md)
   diagrams/  report/             Mermaid/PlantUML, reports and context packs
   extract/                       Read-only SQL kit for the Oracle dictionary extract
   cli.py                         `apex-analyze`
-tools/estate_analyzer/           Cross-estate wrapper (see docs/ESTATE_ANALYZER_SPEC.md)
+tools/estate_analyzer/           Cross-estate wrapper
   federate.py                    Loads the three graphs, namespaces ids, merges db: nodes
   links.py                       The TIBCO-to-database matcher and the confidence ladder
   analysis/                      Inventory, cross-estate rules, modernisation sequence
@@ -796,10 +885,6 @@ tests/
   test_sql_binder.py             The SQL/PL-SQL binder corpus — the quality net
   test_estate_analyzer.py        The three fixtures federated: the join, its confidence
                                  ladder, its coverage gates and its blind spots
-docs/
-  APEX_README.md                 APEX quick start, command reference and gate contract
-  ORACLE_ANALYZER_SPEC.md        Oracle graph model, id grammar, coverage contract
-  ESTATE_ANALYZER_SPEC.md        Federation: node identity, confidence, estate map, gates
 scripts/
   push_to_neo4j.py               Loads the neo4j_* export into a running Neo4j over Bolt
 .env.example                     Template for Neo4j connection settings (copy to .env)

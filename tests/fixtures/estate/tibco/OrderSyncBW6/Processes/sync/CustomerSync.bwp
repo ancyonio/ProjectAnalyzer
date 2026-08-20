@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-    Cross-estate fixture (docs/ESTATE_ANALYZER_SPEC.md section 10).
+    Cross-estate fixture (README.md#cross-estate-analysis).
 
     Four JDBC activities, chosen so the federation matcher is asserted rather
     than assumed:
