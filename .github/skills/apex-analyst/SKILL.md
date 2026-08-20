@@ -121,6 +121,10 @@ switch to it rather than working freehand:
 - [rule-catalogue.md](references/rule-catalogue.md) — every rule, what triggers it
 - [sql-binding.md](references/sql-binding.md) — how SQL becomes edges, and its limits
 
+**Cross-cutting references.** Diagram conventions and report structure are documented once, in the TIBCO skill, and apply to every analyzer here:
+[diagram-standards.md](../tibco-analyst/references/diagram-standards.md) and [report-templates.md](../tibco-analyst/references/report-templates.md). Coverage, provenance and confidence are documented in [analysis-trust](../analysis-trust/SKILL.md).
+
+
 ## Style
 
 British-neutral professional English, no emoji, no hype, tables over prose when

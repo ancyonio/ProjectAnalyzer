@@ -143,6 +143,10 @@ conditions; switch to it rather than working freehand:
 - [resolution-limits.md](references/resolution-limits.md) — how source becomes edges, and where it stops
 - [data-lineage.md](references/data-lineage.md) — reading lineage without overstating it
 
+**Cross-cutting references.** Diagram conventions and report structure are documented once, in the TIBCO skill, and apply to every analyzer here:
+[diagram-standards.md](../tibco-analyst/references/diagram-standards.md) and [report-templates.md](../tibco-analyst/references/report-templates.md). Coverage, provenance and confidence are documented in [analysis-trust](../analysis-trust/SKILL.md).
+
+
 ## Style
 
 British-neutral professional English, no emoji, no hype, tables over prose when

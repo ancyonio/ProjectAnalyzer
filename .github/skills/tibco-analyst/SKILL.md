@@ -358,3 +358,7 @@ Read the one that matches the task; do not inline them all.
 | `references/impact-analysis.md` | How blast radius is computed, choosing depth and direction, reading test scope, worked schema / sub-process / global-variable examples, and the limits |
 | `references/diagram-standards.md` | Which diagram answers which question, Mermaid vs PlantUML, forbidden directives, naming conventions, verification checklist |
 | `references/report-templates.md` | Step00/01/02 structure, generated vs LLM sections, the `<!-- LLM: ... -->` convention, quality bar and final review checklist |
+| `references/rule-catalogue.md` | Every rule, what triggers it, what to recommend, and what the rules cannot see |
+
+**Cross-cutting.** Coverage, provenance and confidence are documented in [analysis-trust](../analysis-trust/SKILL.md); modernisation planning in [migration-planner](../migration-planner/SKILL.md). This skill's `diagram-standards.md` and `report-templates.md` are normative for the APEX, Oracle and estate analyzers too.
+

@@ -129,6 +129,24 @@ The cross-estate catalogue:
 | `XE-006` | a JDBC activity carries no static SQL |
 | `XE-007` | an APEX page reads a table a TIBCO process writes |
 
+## Reference files
+
+Read the one that matches the task; do not inline them all.
+
+| File | Read it when you need |
+|------|----------------------|
+| `references/graph-model.md` | Which ids merge and which stay apart, how inferred edges carry `basis` and `confidence`, what is genuinely new at this level, reading federated coverage |
+| `references/cypher-cookbook.md` | The federated queries, each with its purpose and expected result shape |
+| `references/rule-catalogue.md` | Every `XE-` rule, what triggers it, and which three change a migration plan |
+
+The three source skills document everything estate-specific — read
+`tibco-analyst`, `apex-analyst` or `oracle-analyst` for anything that lives inside
+one estate rather than across them.
+
+**Cross-cutting references.** Diagram conventions and report structure are documented once, in the TIBCO skill, and apply to every analyzer here:
+[diagram-standards.md](../tibco-analyst/references/diagram-standards.md) and [report-templates.md](../tibco-analyst/references/report-templates.md). Coverage, provenance and confidence are documented in [analysis-trust](../analysis-trust/SKILL.md).
+
+
 ## How to write the answer
 
 State the join before the conclusion. A cross-estate claim that does not say
