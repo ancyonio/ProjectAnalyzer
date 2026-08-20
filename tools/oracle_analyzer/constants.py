@@ -36,10 +36,16 @@ PROGRAM_LABELS: Set[str] = {'DbPackage', 'PackageSpec', 'PackageBody',
 CODE_LABELS: Set[str] = {'SqlStatement'}
 
 ANALYSIS_LABELS: Set[str] = {'Issue', 'Recommendation', 'CodeMetric',
-                             'UnresolvedRef'}
+                             'UnresolvedRef', 'TestCase'}
+
+# Reserved for agent reasoning and seeded from what the source states: a
+# package grouping and a write. Spelled the way `apex_analyzer` spells them, so
+# one federated query answers "what implements this capability" across both
+# estates instead of two that disagree.
+SEMANTIC_LABELS: Set[str] = {'BusinessDomain', 'BusinessFunction'}
 
 KNOWN_LABELS: Set[str] = (REPO_LABELS | SCHEMA_OBJECT_LABELS | PROGRAM_LABELS
-                          | CODE_LABELS | ANALYSIS_LABELS)
+                          | CODE_LABELS | ANALYSIS_LABELS | SEMANTIC_LABELS)
 
 # Objects that live in a schema and can be referenced by name from SQL.
 DB_OBJECT_LABELS: Set[str] = {
@@ -68,13 +74,15 @@ DATA_ACCESS_RELS: Set[str] = {
 RUNTIME_RELS: Set[str] = {'FIRES_ON', 'EXECUTES_SQL', 'EXECUTES_PLSQL'}
 
 ANALYSIS_RELS: Set[str] = {'HAS_ISSUE', 'HAS_RECOMMENDATION', 'AFFECTS',
-                           'HAS_METRIC', 'UNRESOLVED'}
+                           'HAS_METRIC', 'UNRESOLVED', 'HAS_TEST'}
+
+SEMANTIC_RELS: Set[str] = {'IMPLEMENTED_BY', 'PART_OF_DOMAIN'}
 
 GIT_RELS: Set[str] = {'HAS_COMMIT', 'HAS_BRANCH', 'CHANGED', 'AUTHORED_BY'}
 
 KNOWN_REL_TYPES: Set[str] = (STRUCTURAL_RELS | DEPENDENCY_RELS
                              | DATA_ACCESS_RELS | RUNTIME_RELS
-                             | ANALYSIS_RELS | GIT_RELS)
+                             | ANALYSIS_RELS | GIT_RELS | SEMANTIC_RELS)
 
 # Without these the parse did not do its job.
 REQUIRED_REL_TYPES: Set[str] = {'OWNS', 'DEFINES'}
@@ -157,6 +165,10 @@ REL_IMPACT_WEIGHTS: Dict[str, float] = {
     'HAS_INDEX': 0.3,
     'HAS_SPEC': 0.9,
     'HAS_BODY': 0.4,
+    # A change to a unit reaches the function it implements and the tests that
+    # cover it -- both are things the change has to account for.
+    'IMPLEMENTED_BY': 0.7,
+    'HAS_TEST': 0.6,
 }
 
 # Structure is not a dependency path. Traversing HAS_UNIT would make every
@@ -165,7 +177,7 @@ REL_IMPACT_WEIGHTS: Dict[str, float] = {
 IMPACT_EXCLUDED_RELS: Set[str] = {
     'OWNS', 'CONTAINS_FILE', 'DEFINES', 'HAS_UNIT', 'HAS_COMMIT', 'HAS_BRANCH',
     'CHANGED', 'AUTHORED_BY', 'HAS_ISSUE', 'AFFECTS', 'HAS_RECOMMENDATION',
-    'HAS_METRIC', 'UNRESOLVED',
+    'HAS_METRIC', 'UNRESOLVED', 'PART_OF_DOMAIN',
 }
 
 MULTIPLIERS: Dict[str, float] = {
@@ -175,6 +187,9 @@ MULTIPLIERS: Dict[str, float] = {
     'SqlStatement': 0.8, 'PlsqlBlock': 0.8, 'DbColumn': 0.3,
     'DbSequence': 0.4, 'DbSynonym': 0.5, 'DbType': 1.0,
     'File': 0.2, 'Issue': 0.0, 'Recommendation': 0.0, 'CodeMetric': 0.0,
+    # A business function is what a change is *reported* as affecting, so it
+    # weighs more than the unit that implements it; a test is scope, not risk.
+    'BusinessFunction': 2.5, 'BusinessDomain': 1.0, 'TestCase': 0.0,
 }
 
 # ─────────────────────────────────────────────────────────────
@@ -182,6 +197,7 @@ MULTIPLIERS: Dict[str, float] = {
 # ─────────────────────────────────────────────────────────────
 INT_FIELDS: Set[str] = {
     'lineStart', 'lineEnd', 'loc', 'lineCount', 'unitCount', 'columnCount',
+    'coversCount',
     'tableCount', 'bindCount', 'callCount', 'statementCount', 'argumentCount',
     'overload', 'columnId', 'dataLength', 'numRows', 'specLines', 'bodyLines',
     'sourceLine', 'fanIn', 'fanOut', 'commitCount', 'changeCount',
@@ -205,6 +221,8 @@ COMPOSITE_CONSTRAINTS: List[Tuple[str, List[str]]] = [
 ]
 
 SECONDARY_INDEXES: List[Tuple[str, List[str]]] = [
+    ('BusinessFunction', ['domain']),
+    ('TestCase', ['suite']),
     ('DbTable', ['owner']),
     ('DbView', ['owner']),
     ('DbPackage', ['owner']),
@@ -230,7 +248,7 @@ FULLTEXT_INDEXES: List[Tuple[str, List[str], List[str]]] = [
 ORPHAN_TOLERANT_LABELS: Set[str] = {
     'DbIndex', 'DbConstraint', 'DbSequence', 'DbType', 'DbDatabaseLink',
     'DbSynonym', 'Repository', 'Branch', 'Commit', 'Developer', 'Directory',
-    'CodeMetric', 'UnresolvedRef', 'Project',
+    'CodeMetric', 'UnresolvedRef', 'Project', 'BusinessDomain', 'TestCase',
 }
 
 ID_PATTERN = re.compile(r'^[A-Za-z0-9_.:#$/@ -]+$')

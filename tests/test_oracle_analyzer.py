@@ -120,7 +120,8 @@ def test_packages_split_into_spec_and_body():
     with tempfile.TemporaryDirectory() as tmp:
         graph = _analyze(Path(tmp))
 
-    assert set(_named(graph, 'DbPackage')) == {'CUSTOMER_PKG', 'AUDIT_PKG'}
+    assert set(_named(graph, 'DbPackage')) == {'CUSTOMER_PKG', 'AUDIT_PKG',
+                                               'TEST_CUSTOMER_PKG'}
     assert f'db:{OWNER}.CUSTOMER_PKG#spec' in _ids(graph, 'PackageSpec')
     assert f'db:{OWNER}.CUSTOMER_PKG#body' in _ids(graph, 'PackageBody')
     assert ('CUSTOMER_PKG', 'CUSTOMER_PKG') in _rel_pairs(graph, 'HAS_SPEC')
@@ -312,8 +313,8 @@ def test_inventory_is_complete():
         inventory = full_inventory(_analyze(Path(tmp)))
 
     assert inventory['summary']['tables'] == 5
-    assert inventory['summary']['packages'] == 2
-    assert inventory['summary']['programUnits'] == 10
+    assert inventory['summary']['packages'] == 3     # two production, one suite
+    assert inventory['summary']['programUnits'] == 12
     assert inventory['schemas'][0]['name'] == OWNER
     assert inventory['entryPoints'], 'no entry points'
     assert inventory['dataAccess'], 'no data access rows'
@@ -581,6 +582,134 @@ def test_commit_counts_reach_the_files_they_touched():
     counted = [node for node in graph.by_label('File')
                if node.properties.get('commitCount')]
     assert counted, 'no file carries a commit count'
+
+
+# ── business layer ────────────────────────────────────────────────────
+def test_business_seed_is_grounded_in_what_the_source_states():
+    """A published unit that writes is a business transaction. A private helper
+    or a read-only lookup is not, however suggestive its name."""
+    with tempfile.TemporaryDirectory() as tmp:
+        graph = _analyze(Path(tmp))
+
+    functions = _named(graph, 'BusinessFunction')
+    assert functions, 'no business functions seeded'
+
+    # CREATE_CUSTOMER is published and inserts; UNUSED_HELPER is private.
+    assert 'CREATE_CUSTOMER' in functions
+    assert 'UNUSED_HELPER' not in functions
+    # GET_CUSTOMER is published but only reads.
+    assert 'GET_CUSTOMER' not in functions
+
+    for node in functions.values():
+        assert node.properties['origin'] == 'derived'
+        assert node.properties['evidence'] in graph.nodes
+        assert 0 < node.properties['confidence'] < 1
+
+
+def test_business_chain_reaches_from_domain_to_table():
+    """Domain to function to unit to table -- the whole point of the layer."""
+    with tempfile.TemporaryDirectory() as tmp:
+        graph = _analyze(Path(tmp))
+
+    assert ('CREATE_CUSTOMER', 'CREATE_CUSTOMER') in         _rel_pairs(graph, 'IMPLEMENTED_BY')
+    assert ('CREATE_CUSTOMER', 'Customer') in _rel_pairs(graph, 'PART_OF_DOMAIN')
+
+    unit = _named(graph, 'DbProgramUnit')['CREATE_CUSTOMER']
+    written = {graph.nodes[w.end_id].name
+               for r in graph.outgoing(unit.node_id)
+               if r.rel_type == 'EXECUTES_SQL'
+               for w in graph.outgoing(r.end_id)
+               if w.rel_type == 'WRITES_TO' and w.end_id in graph.nodes}
+    assert 'CUSTOMERS' in written
+
+
+def test_a_declared_map_supersedes_the_derived_seed():
+    """A stated fact beats a derived one, and only the nodes the map names
+    become declared -- otherwise the confidence figure means nothing."""
+    import json as _json
+
+    with tempfile.TemporaryDirectory() as tmp:
+        map_path = Path(tmp) / 'business.json'
+        map_path.write_text(_json.dumps({
+            'domains': {'Customer': 'Customer Management'},
+            'functions': {'CUSTOMER_PKG.CREATE_CUSTOMER': {
+                'name': 'Customer Onboarding',
+                'domain': 'Customer Management',
+                'criticality': 'HIGH'}},
+        }), encoding='utf-8')
+        graph = _analyze(Path(tmp), business_map=map_path)
+
+    functions = _named(graph, 'BusinessFunction')
+    onboarding = functions['Customer Onboarding']
+    assert onboarding.properties['origin'] == 'declared'
+    assert onboarding.properties['confidence'] == 1.0
+    assert onboarding.properties['criticality'] == 'HIGH'
+
+    domains = _named(graph, 'BusinessDomain')
+    assert domains['Customer Management'].properties['origin'] == 'declared'
+    # A map that names one domain must not restamp the others.
+    assert domains['Audit'].properties['origin'] == 'derived'
+
+
+def test_a_missing_business_map_fails_before_the_parse():
+    """Silently ignoring it would leave the graph saying 'derived' while the
+    operator believes it says 'declared'."""
+    with tempfile.TemporaryDirectory() as tmp:
+        try:
+            _analyze(Path(tmp), business_map=Path(tmp) / 'nope.json')
+        except FileNotFoundError:
+            return
+    raise AssertionError('a missing business map was accepted')
+
+
+# ── test layer ────────────────────────────────────────────────────────
+def test_utplsql_annotations_become_test_cases():
+    with tempfile.TemporaryDirectory() as tmp:
+        graph = _analyze(Path(tmp))
+
+    cases = _named(graph, 'TestCase')
+    assert set(cases) == {'CREATE_CUSTOMER_OK', 'DELETE_CUSTOMER_OK'}, sorted(cases)
+
+    case = cases['CREATE_CUSTOMER_OK']
+    assert case.properties['framework'] == 'utPLSQL'
+    assert case.properties['displayName'] == 'creates a customer row'
+    assert case.properties['suitePath'] == 'order_app.customer'
+    assert case.properties['coversCount'] == 1
+
+
+def test_has_test_runs_from_the_unit_under_test():
+    """The edge points the way the question is asked: what covers this unit."""
+    with tempfile.TemporaryDirectory() as tmp:
+        graph = _analyze(Path(tmp))
+
+    pairs = _rel_pairs(graph, 'HAS_TEST')
+    assert ('CREATE_CUSTOMER', 'CREATE_CUSTOMER_OK') in pairs, sorted(pairs)
+    for rel in graph.rels:
+        if rel.rel_type == 'HAS_TEST':
+            assert graph.nodes[rel.start_id].label == 'DbProgramUnit'
+            assert graph.nodes[rel.end_id].label == 'TestCase'
+
+
+def test_a_suite_does_not_test_itself():
+    """A case calling a helper in its own suite is setup, not coverage."""
+    with tempfile.TemporaryDirectory() as tmp:
+        graph = _analyze(Path(tmp))
+
+    suites = {node.properties['suite'] for node in graph.by_label('TestCase')}
+    for rel in graph.rels:
+        if rel.rel_type != 'HAS_TEST':
+            continue
+        covered = graph.nodes[rel.start_id]
+        assert covered.properties.get('packageName') not in suites
+
+
+def test_test_units_are_not_business_functions():
+    """A test writes nothing itself; it calls something that does."""
+    with tempfile.TemporaryDirectory() as tmp:
+        graph = _analyze(Path(tmp))
+
+    functions = set(_named(graph, 'BusinessFunction'))
+    assert not functions & {'CREATE_CUSTOMER_OK', 'DELETE_CUSTOMER_OK'}
 
 
 if __name__ == '__main__':

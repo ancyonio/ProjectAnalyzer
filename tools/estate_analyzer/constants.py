@@ -105,7 +105,7 @@ REPO_LABELS: Set[str] = {'Project', 'Repository', 'Branch', 'Commit',
                          'Developer', 'Directory', 'File'}
 
 SEMANTIC_LABELS: Set[str] = {'BusinessDomain', 'BusinessFunction',
-                             'BusinessTransaction'}
+                             'BusinessTransaction', 'TestCase'}
 
 ANALYSIS_LABELS: Set[str] = {'Issue', 'Recommendation', 'Metric', 'CodeMetric',
                              'UnresolvedRef'}
@@ -152,7 +152,7 @@ ORACLE_RELS: Set[str] = {
     'CONSTRAINS', 'HAS_SPEC', 'HAS_BODY', 'HAS_UNIT', 'DEPENDS_ON',
     'RESOLVES_TO', 'USES_SEQUENCE', 'USES_TYPE', 'REFERENCES_DBLINK',
     'FIRES_ON', 'EXECUTES_SQL', 'EXECUTES_PLSQL', 'HAS_METRIC', 'UNRESOLVED',
-    'REFERENCES_COLUMN', 'JOINS',
+    'REFERENCES_COLUMN', 'JOINS', 'HAS_TEST',
 }
 
 DATA_ACCESS_RELS: Set[str] = {'READS_FROM', 'WRITES_TO', 'INSERTS_INTO',
@@ -227,7 +227,7 @@ REL_IMPACT_WEIGHTS: Dict[str, float] = {
     # data access -- the spine of every cross-estate answer
     'READS_FROM': 1.0, 'WRITES_TO': 1.0, 'INSERTS_INTO': 1.0,
     'UPDATES': 1.0, 'DELETES_FROM': 1.0, 'REFERENCES_COLUMN': 0.8,
-    'JOINS': 0.4,
+    'JOINS': 0.4, 'HAS_TEST': 0.6,
     # code execution
     'EXECUTES': 0.9, 'EXECUTES_SQL': 0.95, 'EXECUTES_PLSQL': 0.95,
     'EXECUTES_JS': 0.4, 'CALLS': 1.0, 'CALLS_EXTERNAL': 0.6,

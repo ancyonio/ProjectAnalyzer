@@ -18,7 +18,8 @@ has one.
 | Schema objects | `DbSchema`, `DbTable`, `DbColumn`, `DbView`, `DbMaterializedView`, `DbIndex`, `DbConstraint`, `DbSequence`, `DbSynonym`, `DbDatabaseLink`, `DbType`, `DbTrigger` |
 | Program structure | `DbPackage`, `PackageSpec`, `PackageBody`, `DbProgramUnit`, `PlsqlBlock` |
 | Code | `SqlStatement` |
-| Analysis | `Issue`, `Recommendation`, `CodeMetric`, `UnresolvedRef` |
+| Analysis | `Issue`, `Recommendation`, `CodeMetric`, `UnresolvedRef`, `TestCase` |
+| Business | `BusinessDomain`, `BusinessFunction` |
 
 ## Why a package is three nodes
 
@@ -49,6 +50,8 @@ break callers?* — unanswerable. A unit reachable from outside carries
 | What touches this column? | `(:SqlStatement)-[:REFERENCES_COLUMN]->(:DbColumn)` |
 | Which tables are queried together? | `(:SqlStatement)-[:JOINS]->(:DbTable)` |
 | What depends on this user-defined type? | `(:DbProgramUnit)-[:USES_TYPE]->(:DbType)` |
+| What implements this business function? | `(:BusinessFunction)-[:IMPLEMENTED_BY]->(:DbProgramUnit)` |
+| What covers this program unit? | `(:DbProgramUnit)-[:HAS_TEST]->(:TestCase)` |
 
 ### Both the verb and the roll-up
 
@@ -115,6 +118,42 @@ production but still in source control, a column added by a hotfix that never ca
 back — and the disagreement is itself a finding. `graph.meta.coverage.dictionaryAvailable`
 says which kind of graph you are holding.
 
+## The business layer is a seed, not a finding
+
+`BusinessDomain` and `BusinessFunction` are seeded from the two things an Oracle
+tree actually states: which package a unit belongs to, and whether that unit
+writes. A unit that is **callable from outside and changes data** becomes a
+function; its package becomes the domain. A private helper or a read-only lookup
+becomes neither.
+
+Read `origin` before quoting any of it:
+
+| `origin` | Confidence | Means |
+|---|---|---|
+| `derived` | 0.4–0.5 | the analyzer's guess from package and writes |
+| `declared` | 1.0 | stated in the `--business-map` file, which wins |
+
+Every function carries `evidence` — the node id it was derived from — and an
+`IMPLEMENTED_BY` edge. A function with neither fails validation, because a
+seeded node and an invented one are indistinguishable once they are in Neo4j.
+
+The names are the ones `apex_analyzer` uses, so one federated `IMPLEMENTED_BY`
+query answers "what implements this capability" across both estates.
+
+## The test layer
+
+`TestCase` comes from utPLSQL annotations — `--%suite` on a package,
+`--%test` on a declaration — read from the source, never guessed from a name
+like `TEST_%`. Coverage comes from what a case calls, so `HAS_TEST` runs from
+the production unit **to** the case: the direction "what covers this?" is asked
+in. Units inside a suite are excluded from their own coverage. A case that
+calls nothing resolvable is still recorded, with `coversCount: 0` — an
+untraceable test is a visible gap, not an absent one.
+
+No annotations means no `TestCase` nodes at all. That is "this repository does
+not carry utPLSQL tests", not "this code is untested" — the tests may live
+somewhere the analyzer never saw.
+
 ## Source locations
 
 Every code node carries `filePath`, `lineStart`, `lineEnd` and `language`, so a
@@ -134,10 +173,6 @@ Column-to-column flow is also absent. `REFERENCES_COLUMN` records that a
 statement names a column, not that one column populates another — see
 [data-lineage.md](data-lineage.md).
 
-Business capabilities and test cases are not modelled either, and not because
-they were forgotten: nothing in an Oracle source tree states them, so the only
-way to produce them would be to infer them from names. Every node in this graph
-comes from a statement in a script or a row in a dictionary extract, and a
-guessed node is indistinguishable from a parsed one once it is in the database.
-Where a business layer exists it is built by `estate_analyzer`, from evidence
-the APEX and TIBCO exports actually carry.
+Business *rules* are not modelled. A CHECK constraint or a trigger condition
+encodes one, but extracting the rule from the expression means interpreting it,
+and this graph does not interpret.

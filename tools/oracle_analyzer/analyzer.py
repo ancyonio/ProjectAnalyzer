@@ -14,7 +14,7 @@ Pass order matters:
     4 dictionary      merge the authoritative extract over the DDL result
     5 cross-reference resolve calls, data access, view and trigger targets
     6 history         Git commits touching analysed files
-    7 derive          metrics, rule findings, coverage
+    7 derive          metrics, rule findings, tests, business seed, coverage
 """
 from __future__ import annotations
 
@@ -29,6 +29,7 @@ from analyzer_core.ids import (object_id, project_id, repository_id,
 from analyzer_core.model import Graph, GraphNode, GraphRel
 from analyzer_core.utils import sha1_16
 
+from .analysis.semantics import load_business_map
 from .constants import SCHEMA_VERSION
 from .parsers import (CrossReferenceMixin, DictionaryMixin, GitMetadataMixin,
                       ProgramParserMixin, SchemaObjectParserMixin,
@@ -50,7 +51,8 @@ class OracleAnalyzer(
     """Parses an Oracle source repository into a `Graph`."""
 
     def __init__(self, source_root, output_dir,
-                 default_owner: str = '', db_meta: Optional[Path] = None):
+                 default_owner: str = '', db_meta: Optional[Path] = None,
+                 business_map: Optional[Path] = None):
         self.source_root = Path(source_root).resolve()
         self.output_dir = Path(output_dir).resolve()
         self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -59,6 +61,10 @@ class OracleAnalyzer(
 
         self.default_owner = (default_owner or 'UNKNOWN').upper()
         self.db_meta = Path(db_meta) if db_meta else None
+        # Read at construction, not in the derive pass: a bad map should fail
+        # before the expensive parse, not after it.
+        self.business_map = load_business_map(
+            Path(business_map) if business_map else None)
 
         # graph
         self.nodes: Dict[str, GraphNode] = {}
@@ -194,12 +200,21 @@ class OracleAnalyzer(
     def _derive(self) -> int:
         from .analysis.metrics import attach_metrics
         from .analysis.rules_catalog import apply_rules
+        from .analysis.semantics import seed_business_layer
+        from .analysis.tests_catalog import attach_tests
 
         metrics = attach_metrics(self)
+        # Tests before rules: a rule that scores coverage needs the test edges
+        # to exist, and a rule that fires on an untested entry point cannot
+        # tell "no tests" from "tests not read yet".
+        tests = attach_tests(self)
+        business = seed_business_layer(self, self.business_map)
         findings = apply_rules(self)
         self.stats['metrics'] = metrics
         self.stats['findings'] = findings
-        logger.info('  %d metric node(s), %d finding(s)', metrics, findings)
+        self.stats['business_nodes'] = business
+        logger.info('  %d metric node(s), %d test case(s), %d business node(s), '
+                    '%d finding(s)', metrics, tests, business, findings)
         return findings
 
     # ── meta ──────────────────────────────────────────────────────────

@@ -96,6 +96,61 @@ def resolution_coverage(graph: Graph) -> List[Finding]:
                     f'Resolution coverage {value}%', detail)]
 
 
+def business_seed_is_grounded(graph: Graph) -> List[Finding]:
+    """Every seeded business node must say where it came from.
+
+    A `BusinessFunction` with no `evidence` and no `IMPLEMENTED_BY` edge is
+    indistinguishable from one an agent invented, and once it is in Neo4j
+    nobody can tell the difference. That is the one thing this layer must not
+    allow.
+    """
+    ungrounded = []
+    for node in graph.by_label('BusinessFunction'):
+        implemented = any(r.rel_type == 'IMPLEMENTED_BY'
+                          for r in graph.outgoing(node.node_id))
+        if not implemented or not node.properties.get('evidence'):
+            ungrounded.append(node.name)
+    if ungrounded:
+        return [Finding('ERROR', 'business-seed-grounded',
+                        f'{len(ungrounded)} business function(s) have no '
+                        f'evidence or nothing implementing them',
+                        sorted(ungrounded))]
+    functions = len(graph.by_label('BusinessFunction'))
+    if functions:
+        declared = sum(1 for n in graph.by_label('BusinessFunction')
+                       if n.properties.get('origin') == 'declared')
+        return [Finding('INFO', 'business-seed-grounded',
+                        f'{functions} business function(s), {declared} declared '
+                        f'and {functions - declared} derived')]
+    return []
+
+
+def test_coverage(graph: Graph) -> List[Finding]:
+    """Entry points with no test, reported as scope rather than as a defect."""
+    cases = graph.by_label('TestCase')
+    if not cases:
+        return []
+    untested = []
+    for node in graph.by_label('DbProgramUnit'):
+        if not (node.properties.get('isPublished')
+                or node.properties.get('isStandalone')):
+            continue
+        if node.properties.get('declaredOnly'):
+            continue
+        if any(r.rel_type == 'HAS_TEST' for r in graph.outgoing(node.node_id)):
+            continue
+        if str(node.properties.get('packageName') or '') in {
+                c.properties.get('suite') for c in cases}:
+            continue                      # the suite does not test itself
+        untested.append(node.name)
+    if untested:
+        return [Finding('INFO', 'test-coverage',
+                        f'{len(cases)} test case(s); {len(untested)} entry '
+                        f'point(s) have none', sorted(untested))]
+    return [Finding('INFO', 'test-coverage',
+                    f'{len(cases)} test case(s) cover every entry point')]
+
+
 def invalid_objects(graph: Graph) -> List[Finding]:
     invalid = [n.name for n in graph.nodes.values()
                if str(n.properties.get('status', '')).upper() == 'INVALID']
@@ -116,6 +171,8 @@ def dynamic_sql_declared(graph: Graph) -> List[Finding]:
 
 
 ORACLE_RULES = [
+    business_seed_is_grounded,
+    test_coverage,
     package_body_without_spec,
     unit_not_in_package,
     data_access_coverage,

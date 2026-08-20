@@ -23,6 +23,9 @@ Set `$objectName`, `$unitName` or `$columnName` in Neo4j Browser before running 
 | `column-usage` | What touches a column |
 | `join-partners` | Tables that are queried together |
 | `type-dependents` | What depends on a user-defined type |
+| `business-to-data` | Business function down to the tables it changes |
+| `untested-entry-points` | Entry points with no test |
+| `test-coverage` | What covers a program unit |
 | `trigger-map` | Triggers and what they fire on |
 | `dynamic-sql` | Where dependency analysis stops |
 | `unresolved` | Unresolved references |
@@ -194,6 +197,45 @@ MATCH (dependent)-[:USES_TYPE]->(t:DbType)
 RETURN t.name AS Type, t.typeCategory AS Category,
        collect(dependent.name) AS Dependents
 ORDER BY Type;
+```
+
+## Business function down to the tables it changes
+
+_The chain a modernisation conversation runs on: capability to code to data. Check `origin` before quoting it -- a derived seed is a starting point, a declared one is a fact._
+
+```cypher
+MATCH (d:BusinessDomain)<-[:PART_OF_DOMAIN]-(f:BusinessFunction)
+      -[:IMPLEMENTED_BY]->(u:DbProgramUnit)
+MATCH (u)-[:EXECUTES_SQL]->(:SqlStatement)-[:WRITES_TO]->(t:DbTable)
+RETURN d.name AS Domain, f.name AS Function, f.origin AS Origin,
+       f.confidence AS Confidence, u.name AS Unit,
+       collect(DISTINCT t.name) AS Writes
+ORDER BY Domain, Function;
+```
+
+## Entry points with no test
+
+_Where a rewrite carries the most risk: callable from outside, changes data, and nothing covers it._
+
+```cypher
+MATCH (u:DbProgramUnit)
+WHERE (u.isPublished OR u.isStandalone) AND NOT u.declaredOnly
+  AND NOT (u)-[:HAS_TEST]->(:TestCase)
+  AND (u)-[:EXECUTES_SQL]->(:SqlStatement)-[:WRITES_TO]->()
+RETURN u.owner AS Schema, u.packageName AS Package,
+       u.name AS Unit, u.complexity AS Complexity
+ORDER BY Complexity DESC;
+```
+
+## What covers a program unit
+
+_Read before changing a unit: the cases that exercise it, and the suite they live in._
+
+```cypher
+MATCH (u:DbProgramUnit)-[:HAS_TEST]->(c:TestCase)
+RETURN u.packageName AS Package, u.name AS Unit,
+       c.suite AS Suite, collect(c.displayName) AS Cases
+ORDER BY Package, Unit;
 ```
 
 ## Triggers and what they fire on

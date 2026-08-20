@@ -166,6 +166,43 @@ CYPHER_COOKBOOK: List[Dict[str, str]] = [
                   'ORDER BY Type;',
     },
     {
+        'id': 'business-to-data',
+        'title': 'Business function down to the tables it changes',
+        'purpose': 'The chain a modernisation conversation runs on: capability '
+                   'to code to data. Check `origin` before quoting it -- a '
+                   'derived seed is a starting point, a declared one is a fact.',
+        'cypher': 'MATCH (d:BusinessDomain)<-[:PART_OF_DOMAIN]-(f:BusinessFunction)\n'
+                  '      -[:IMPLEMENTED_BY]->(u:DbProgramUnit)\n'
+                  'MATCH (u)-[:EXECUTES_SQL]->(:SqlStatement)-[:WRITES_TO]->(t:DbTable)\n'
+                  'RETURN d.name AS Domain, f.name AS Function, f.origin AS Origin,\n'
+                  '       f.confidence AS Confidence, u.name AS Unit,\n'
+                  '       collect(DISTINCT t.name) AS Writes\n'
+                  'ORDER BY Domain, Function;',
+    },
+    {
+        'id': 'untested-entry-points',
+        'title': 'Entry points with no test',
+        'purpose': 'Where a rewrite carries the most risk: callable from '
+                   'outside, changes data, and nothing covers it.',
+        'cypher': 'MATCH (u:DbProgramUnit)\n'
+                  'WHERE (u.isPublished OR u.isStandalone) AND NOT u.declaredOnly\n'
+                  '  AND NOT (u)-[:HAS_TEST]->(:TestCase)\n'
+                  '  AND (u)-[:EXECUTES_SQL]->(:SqlStatement)-[:WRITES_TO]->()\n'
+                  'RETURN u.owner AS Schema, u.packageName AS Package,\n'
+                  '       u.name AS Unit, u.complexity AS Complexity\n'
+                  'ORDER BY Complexity DESC;',
+    },
+    {
+        'id': 'test-coverage',
+        'title': 'What covers a program unit',
+        'purpose': 'Read before changing a unit: the cases that exercise it, '
+                   'and the suite they live in.',
+        'cypher': 'MATCH (u:DbProgramUnit)-[:HAS_TEST]->(c:TestCase)\n'
+                  'RETURN u.packageName AS Package, u.name AS Unit,\n'
+                  '       c.suite AS Suite, collect(c.displayName) AS Cases\n'
+                  'ORDER BY Package, Unit;',
+    },
+    {
         'id': 'trigger-map',
         'title': 'Triggers and what they fire on',
         'purpose': 'Hidden control flow: a write to a table may run code the '

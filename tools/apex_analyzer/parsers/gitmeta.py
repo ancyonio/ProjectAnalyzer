@@ -58,10 +58,22 @@ class GitMetadataMixin:
         self._node(branch_node, 'Branch', branch or 'HEAD', {'headSha': head})
         self._rel(repo_node, branch_node, 'HAS_BRANCH')
 
+        # `git log` reports paths from the repository root, while `File` nodes
+        # are keyed relative to the analysed root. Those coincide only when the
+        # export sits at the top of the repository; anywhere else every path
+        # misses and the layer silently records no changes at all.
+        prefix = (_run(['git', 'rev-parse', '--show-prefix'], root) or '').strip()
+        prefix = prefix.replace('\\', '/')
+        if prefix and not prefix.endswith('/'):
+            prefix += '/'
+
         args = ['git', 'log', f'--format={_FORMAT}', '--name-status',
                 f'--max-count={_MAX_COMMITS}']
         if self.git_range:
             args.append(self.git_range)
+        # Confine the log to the analysed subtree so the commit budget is spent
+        # on relevant history rather than on the rest of a monorepo.
+        args += ['--', '.']
         output = _run(args, root)
         if output is None:
             self.export_meta['gitStatus'] = f'git log failed for range {self.git_range}'
@@ -85,6 +97,11 @@ class GitMetadataMixin:
             if len(parts) < 2:
                 continue
             status, path = parts[0].strip(), parts[-1].strip()
+            path = path.replace('\\', '/')
+            if prefix:
+                if not path.startswith(prefix):
+                    continue                  # outside the analysed subtree
+                path = path[len(prefix):]
             node_id = file_id(path)
             if node_id in self.nodes:
                 self._rel(current, node_id, 'CHANGED', changeType=status[:1])

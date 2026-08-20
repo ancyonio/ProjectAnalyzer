@@ -1,6 +1,7 @@
 """Command line interface.
 
-    oracle-analyze analyze   --source <repo_root> [--schema ORDER_APP] [--db-meta db_meta.json]
+    oracle-analyze analyze   --source <repo_root> [--schema ORDER_APP]
+                             [--db-meta db_meta.json] [--business-map map.json]
     oracle-analyze validate  [--strict]
     oracle-analyze inventory [--json]
     oracle-analyze rules     [--category SECURITY] [--min-severity HIGH]
@@ -73,7 +74,9 @@ def cmd_analyze(args: argparse.Namespace) -> int:
     output_dir = Path(args.output)
     analyzer = OracleAnalyzer(args.source, output_dir,
                               default_owner=args.schema or '',
-                              db_meta=Path(args.db_meta) if args.db_meta else None)
+                              db_meta=Path(args.db_meta) if args.db_meta else None,
+                              business_map=Path(args.business_map)
+                              if args.business_map else None)
     graph = analyzer.analyze()
     graph.save(output_dir / GRAPH_FILE)
 
@@ -425,6 +428,9 @@ def _source_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument('--db-meta',
                         help='db_meta.json data-dictionary extract '
                              '(authoritative where present)')
+    parser.add_argument('--business-map',
+                        help='JSON map of declared business domains and '
+                             'functions; overrides the derived seed')
 
 
 def main(argv: Optional[List[str]] = None) -> int:

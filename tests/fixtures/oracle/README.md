@@ -16,3 +16,7 @@ the analyzer's boundaries are asserted rather than assumed:
 - a two-table `INSERT ... SELECT`, so `JOINS` fires and a single-table read
   is asserted not to
 - a credential in `deploy/install.sql`, asserted never to reach the graph
+- a utPLSQL suite under `tests/`, so `TestCase` and `HAS_TEST` are built from
+  real annotations and the suite is asserted not to test itself
+- published units that write (business functions) alongside a private helper
+  and a read-only lookup that must **not** become one

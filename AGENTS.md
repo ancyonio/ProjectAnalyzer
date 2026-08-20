@@ -111,7 +111,8 @@ PYTHONPATH=tools python -m oracle_analyzer -o analysis_output_oracle lineage \
 ```
 
 Subcommands: `analyze`, `validate`, `inventory`, `rules`, `impact`, `lineage`, `diagrams`,
-`context`, `report`, `queries`, `all`. Graph vocabulary:
+`context`, `report`, `queries`, `all`. `analyze` also takes `--business-map map.json`,
+which replaces the derived business seed with declared domains and functions. Graph vocabulary:
 [.github/skills/oracle-analyst/references/graph-model.md](.github/skills/oracle-analyst/references/graph-model.md);
 Cypher:
 [.github/skills/oracle-analyst/references/cypher-cookbook.md](.github/skills/oracle-analyst/references/cypher-cookbook.md).
