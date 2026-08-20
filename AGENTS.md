@@ -111,8 +111,10 @@ PYTHONPATH=tools python -m oracle_analyzer -o analysis_output_oracle lineage \
 ```
 
 Subcommands: `analyze`, `validate`, `inventory`, `rules`, `impact`, `lineage`, `diagrams`,
-`context`, `report`, `queries`, `all`. Specification:
-[docs/ORACLE_ANALYZER_SPEC.md](docs/ORACLE_ANALYZER_SPEC.md).
+`context`, `report`, `queries`, `all`. Graph vocabulary:
+[.github/skills/oracle-analyst/references/graph-model.md](.github/skills/oracle-analyst/references/graph-model.md);
+Cypher:
+[.github/skills/oracle-analyst/references/cypher-cookbook.md](.github/skills/oracle-analyst/references/cypher-cookbook.md).
 
 ### Cross-estate
 

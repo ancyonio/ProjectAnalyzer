@@ -30,6 +30,15 @@ _CREATE_PACKAGE_RE = re.compile(
 _CREATE_UNIT_RE = re.compile(
     r'\bcreate\s+(?:or\s+replace\s+)?(?:editionable\s+)?(procedure|function)\s+([\w$#."]+)',
     re.IGNORECASE)
+# `create type` was previously unparsed, so a `DbType` node could only ever
+# arrive from a dictionary extract and a repository-only analysis had nothing
+# for `USES_TYPE` to bind to.
+_CREATE_TYPE_RE = re.compile(
+    r'\bcreate\s+(?:or\s+replace\s+)?(?:editionable\s+)?type\s+(body\s+)?'
+    r'([\w$#."]+)', re.IGNORECASE)
+_TYPE_CATEGORY_RE = re.compile(
+    r'\bas\s+(object|table\s+of|varray\s*\([^)]*\)\s*of|record)\b',
+    re.IGNORECASE)
 _CREATE_TRIGGER_RE = re.compile(
     r'\bcreate\s+(?:or\s+replace\s+)?trigger\s+([\w$#."]+)(.*?)\bon\s+([\w$#."]+)',
     re.IGNORECASE | re.DOTALL)
@@ -86,6 +95,10 @@ class DdlObject:
     triggering_event: str = ''
     source_file: str = ''
     source_line: int = 0
+    # The last line of the statement that produced this object. Without it a
+    # finding can say where an object starts but not how far it reaches, which
+    # is the difference between "look here" and "read this file".
+    source_line_end: int = 0
     foreign_keys: List[Tuple[str, str, str]] = field(default_factory=list)
     # (constraint name, referenced object, columns)
 
@@ -167,9 +180,11 @@ def parse_ddl(text: str, default_owner: str = '', source_file: str = '') -> DdlR
         if obj is None:
             result.unparsed += 1
             continue
+        line_end = line_number + statement.count('\n')
         for parsed in (obj if isinstance(obj, list) else [obj]):
             parsed.source_file = source_file
             parsed.source_line = line_number
+            parsed.source_line_end = line_end
             result.objects.append(parsed)
     return result
 
@@ -207,6 +222,18 @@ def _parse_statement(statement: str, default_owner: str):
         owner, name, _ = split_object(match.group(2))
         return DdlObject(owner or default_owner, name, 'UNIT',
                          units=[(match.group(1).upper(), name)], body=statement)
+
+    match = _CREATE_TYPE_RE.search(masked)
+    if match:
+        owner, name, _ = split_object(match.group(2))
+        category = _TYPE_CATEGORY_RE.search(masked[match.end():])
+        obj = DdlObject(owner or default_owner, name, 'TYPE',
+                        body=statement if match.group(1) else '')
+        # The spec declares the shape; the body implements its methods. Both
+        # are the same type, so they converge on one node rather than two.
+        obj.query = (re.sub(r'\s+', ' ', category.group(1)).upper()
+                     if category else ('BODY' if match.group(1) else ''))
+        return obj
 
     match = _CREATE_TRIGGER_RE.search(masked)
     if match:
@@ -337,13 +364,19 @@ def _split_top_level(masked: str) -> List[Tuple[int, int]]:
     return spans
 
 
-def extract_unit_bodies(body: str) -> List[Tuple[str, str, str]]:
-    """Split a package body into (kind, name, source) triples."""
-    masked = mask_literals(body or '')
+def extract_unit_bodies(body: str) -> List[Tuple[str, str, str, int]]:
+    """Split a package body into (kind, name, source, line offset) tuples.
+
+    The offset is the unit's first line counted from the start of the body, so
+    a caller that knows where the body begins can give every unit its own line
+    range instead of stamping all of them with the package's.
+    """
+    body = body or ''
+    masked = mask_literals(body)
     matches = list(_UNIT_IN_BODY_RE.finditer(masked))
-    out: List[Tuple[str, str, str]] = []
+    out: List[Tuple[str, str, str, int]] = []
     for i, match in enumerate(matches):
         end = matches[i + 1].start() if i + 1 < len(matches) else len(body)
         out.append((match.group(1).upper(), match.group(2).strip('"').upper(),
-                    body[match.start():end]))
+                    body[match.start():end], body.count('\n', 0, match.start())))
     return out

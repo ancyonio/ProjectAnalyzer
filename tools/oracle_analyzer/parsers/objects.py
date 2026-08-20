@@ -72,6 +72,10 @@ class SchemaObjectParserMixin:
             'objectType': obj.kind,
             'filePath': source.rel_path,
             'lineStart': obj.source_line,
+            # The statement's last line. An object a finding points at is
+            # useless to locate if only its first line is known.
+            'lineEnd': obj.source_line_end or obj.source_line,
+            'language': 'PLSQL' if obj.kind in ('TRIGGER', 'TYPE') else 'SQL',
             'origin': 'ddl',
         }
 
@@ -90,6 +94,9 @@ class SchemaObjectParserMixin:
             properties['constraintType'] = obj.query
             properties['columns'] = ', '.join(c.name for c in obj.columns)
             properties['referencedObject'] = obj.target
+        if obj.kind == 'TYPE':
+            properties['typeCategory'] = obj.query or 'OBJECT'
+            properties['loc'] = (obj.body or '').count(chr(10)) + 1 if obj.body else 0
         if obj.kind == 'TRIGGER':
             properties['baseObject'] = obj.base_object
             properties['triggeringEvent'] = obj.triggering_event

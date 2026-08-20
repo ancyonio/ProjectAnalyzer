@@ -48,11 +48,18 @@ access list: it is the provenance of the values being written.
    `DELETES_FROM`; a provenance question needs `INSERTS_INTO`. Use the specific verb
    and say which one you used.
 
-6. **Column-level lineage is not implemented.** `REFERENCES_COLUMN` is in the
-   vocabulary and column nodes exist, but the binder does not yet map a source column
-   to a target column through a statement — that is Phase 2 in
-   `docs/ORACLE_ANALYZER_SPEC.md` §11. Table-level lineage is complete; a
-   column-level claim is not supported by this graph and must not be made from it.
+6. **Column-level lineage is per-statement, not column-to-column.**
+   `REFERENCES_COLUMN` binds a `SqlStatement` to every `DbColumn` it names, so
+   "which statements touch `CUSTOMERS.NAME`" is answerable and so is the set of
+   columns a unit reaches through its statements. What is *not* modelled is flow
+   between two columns — that `SOURCE.AMOUNT` populates `TARGET.TOTAL`. A
+   statement that reads four columns and writes one records five references, not
+   the mapping between them. Say which of the two you are answering.
+
+   The binder is strict: a candidate that is not a column of a table in scope
+   produces no edge, and an unqualified name is bound only when exactly one table
+   could own it. Absence of a `REFERENCES_COLUMN` edge therefore means "not
+   resolvable", not "not referenced".
 
 ## Commands
 

@@ -7,6 +7,13 @@ most, and who owns the complex ones.
 
 Only commits touching analysed files are recorded, so the graph does not grow
 with the history of unrelated parts of a monorepo.
+
+`git log` reports paths from the repository root while the graph keys files
+from the analysed root, and those coincide only when the analysed root *is* the
+repository root. An Oracle schema normally lives in a subdirectory, so the
+prefix is read from `git rev-parse --show-prefix` and stripped before the
+comparison. Without that step nothing matches and the layer reports no history
+at all, which is indistinguishable from a tree that genuinely has none.
 """
 from __future__ import annotations
 
@@ -37,6 +44,18 @@ def _git(root: Path, *args: str) -> Optional[str]:
     return result.stdout
 
 
+def _relative_to_root(path: str, prefix: str) -> str:
+    """A logged path expressed the way the graph keys files.
+
+    Returns '' for anything outside the analysed subtree; that never matches an
+    analysed file, so the caller drops it.
+    """
+    path = path.strip().replace('\\', '/')
+    if not prefix:
+        return path
+    return path[len(prefix):] if path.startswith(prefix) else ''
+
+
 class GitMetadataMixin:
     """Adds Repository, Branch, Commit and Developer nodes when Git is present."""
 
@@ -56,9 +75,18 @@ class GitMetadataMixin:
             self._add_rel(self.repository_id, branch_node, 'HAS_BRANCH',
                           purpose='repository-branch')
 
+        # Logged paths are repository-relative; the graph is keyed on paths
+        # relative to the analysed root.
+        prefix = (_git(root, 'rev-parse', '--show-prefix') or '').strip()
+        prefix = prefix.replace('\\', '/')
+        if prefix and not prefix.endswith('/'):
+            prefix += '/'
+
+        # `-- .` confines the log to the analysed subtree, so the commit budget
+        # is spent on relevant history rather than on the rest of a monorepo.
         log = _git(root, 'log', f'-{_MAX_COMMITS}',
                    f'--pretty=format:%H{_SEP}%an{_SEP}%ae{_SEP}%aI{_SEP}%s',
-                   '--name-only')
+                   '--name-only', '--', '.')
         if not log:
             self.stats['commits'] = 0
             return 0
@@ -73,8 +101,9 @@ class GitMetadataMixin:
             if not lines or _SEP not in lines[0]:
                 continue
             sha, author, email, when, subject = (lines[0].split(_SEP) + [''] * 5)[:5]
-            touched = [path.replace('\\', '/') for path in lines[1:]
-                       if path.replace('\\', '/') in analysed]
+            touched = [rel for rel in
+                       (_relative_to_root(path, prefix) for path in lines[1:])
+                       if rel in analysed]
             if not touched:
                 continue
 

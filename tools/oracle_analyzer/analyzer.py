@@ -83,6 +83,11 @@ class OracleAnalyzer(
         self.deferred_indexes: List[Tuple[str, str]] = []
         self.deferred_constraints: List[Tuple[str, Any]] = []
         self.deferred_inline_fks: List[Tuple[str, str, str, str, Any]] = []
+        # (statement, owner, column candidates, alias map, table keys)
+        self.deferred_columns: List[Tuple[str, str, Tuple,
+                                          Dict[str, str], Tuple]] = []
+        self.deferred_joins: List[Tuple[str, str, str]] = []
+        self.deferred_types: List[Tuple[str, str, str]] = []
         self.late_access: List[Tuple[str, str, str, str, str]] = []
         self.late_calls: List[Tuple[str, str, str, str]] = []
 

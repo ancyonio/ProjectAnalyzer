@@ -46,8 +46,9 @@ on.
 
 ## 5. State the limits
 
-- **Column-level lineage is not implemented.** Table-level lineage is complete;
-  column-to-column flow is Phase 2 in `docs/ORACLE_ANALYZER_SPEC.md`. Do not infer it.
+- **Column references are per-statement, not column-to-column.** `REFERENCES_COLUMN`
+  says a statement names a column; it does not say which column feeds which. Answer
+  "what touches this column", never "this column populates that one".
 - **Dynamic SQL is a hole in the lineage, not an absence of it.** Check the
   dynamic-SQL sites before saying "nothing else writes this table". The honest form is
   "nothing else that the analyzer can resolve".

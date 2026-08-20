@@ -3,13 +3,9 @@
        PYTHONPATH=tools python -c "from oracle_analyzer.graph.queries import render_markdown; print(render_markdown())"
      Do not hand-edit: the analyzer emits the same cookbook into
      analysis_output_oracle/ANALYSIS_QUERIES.md, and the two must agree. -->
-
 # Oracle PL/SQL Knowledge Graph — Cypher Query Cookbook
 
-Run these in Neo4j Browser after loading `neo4j_nodes.csv` / `neo4j_relationships.csv`
-with `scripts/push_to_neo4j.py`, or after replaying `neo4j_import.cypher`.
-
-Set `$objectName` or `$unitName` in Neo4j Browser before running a parameterised query, for example `:param objectName => "ORDERS"`.
+Set `$objectName`, `$unitName` or `$columnName` in Neo4j Browser before running a parameterised query, for example `:param objectName => "ORDERS"`.
 
 | id | Question |
 |---|---|
@@ -24,6 +20,9 @@ Set `$objectName` or `$unitName` in Neo4j Browser before running a parameterised
 | `hotspots` | Most depended-upon objects |
 | `view-lineage` | View lineage |
 | `table-lineage` | Everything that feeds a table |
+| `column-usage` | What touches a column |
+| `join-partners` | Tables that are queried together |
+| `type-dependents` | What depends on a user-defined type |
 | `trigger-map` | Triggers and what they fire on |
 | `dynamic-sql` | Where dependency analysis stops |
 | `unresolved` | Unresolved references |
@@ -159,6 +158,42 @@ OPTIONAL MATCH (u:DbProgramUnit)-[:EXECUTES_SQL]->(s)
 RETURN u.name AS Unit, s.verb AS Verb,
        collect(DISTINCT src.name) AS ReadsFrom
 ORDER BY Unit;
+```
+
+## What touches a column
+
+_The question a column rename or a type change starts with. Reports the statement and the unit that runs it; the graph does not claim which column feeds which._
+
+```cypher
+MATCH (c:DbColumn {name: $columnName})<-[:REFERENCES_COLUMN]-(s:SqlStatement)
+OPTIONAL MATCH (u:DbProgramUnit)-[:EXECUTES_SQL]->(s)
+RETURN c.tableName AS Table, c.name AS Column,
+       collect(DISTINCT u.name) AS Units, s.verb AS Verb
+ORDER BY Table, Column;
+```
+
+## Tables that are queried together
+
+_Where a composite index or a denormalisation would pay. JOINS is only emitted when a statement combines more than one table, so a plain read never appears here._
+
+```cypher
+MATCH (s:SqlStatement)-[:JOINS]->(t:DbTable)
+WITH s, collect(DISTINCT t.name) AS Tables
+WHERE size(Tables) > 1
+RETURN Tables, count(*) AS Statements
+ORDER BY Statements DESC
+LIMIT 25;
+```
+
+## What depends on a user-defined type
+
+_A type change is a recompile for everything that declares it, and that dependency is invisible in the data-access edges._
+
+```cypher
+MATCH (dependent)-[:USES_TYPE]->(t:DbType)
+RETURN t.name AS Type, t.typeCategory AS Category,
+       collect(dependent.name) AS Dependents
+ORDER BY Type;
 ```
 
 ## Triggers and what they fire on

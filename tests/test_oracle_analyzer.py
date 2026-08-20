@@ -1,4 +1,7 @@
-"""Tests for the Oracle analyzer (docs/ORACLE_ANALYZER_SPEC.md §10).
+"""Tests for the Oracle analyzer.
+
+The graph vocabulary these tests assert against is documented for agents in
+`.github/skills/oracle-analyst/references/graph-model.md`.
 
 Run with `pytest tests`, or directly with `python tests/test_oracle_analyzer.py`
 (no pytest needed for the direct path).
@@ -7,7 +10,8 @@ The fixture under `tests/fixtures/oracle` is a small Oracle estate carrying
 deliberately seeded conditions, so the analyzer's boundaries are asserted
 rather than assumed: an overloaded function, dynamic SQL built by
 concatenation, a call to a package that is not in the tree, a private unit
-nothing calls, and a credential in a deployment script.
+nothing calls, a user-defined object type, and a credential in a deployment
+script.
 """
 from __future__ import annotations
 
@@ -309,7 +313,7 @@ def test_inventory_is_complete():
 
     assert inventory['summary']['tables'] == 5
     assert inventory['summary']['packages'] == 2
-    assert inventory['summary']['programUnits'] == 9
+    assert inventory['summary']['programUnits'] == 10
     assert inventory['schemas'][0]['name'] == OWNER
     assert inventory['entryPoints'], 'no entry points'
     assert inventory['dataAccess'], 'no data access rows'
@@ -398,6 +402,185 @@ def test_deployment_scripts_are_not_analysed():
 
     files = {node.properties.get('filePath') for node in graph.by_label('File')}
     assert not any(str(path).startswith('deploy/') for path in files if path)
+
+
+# ── type, column and join dependencies ────────────────────────────────
+def test_user_defined_types_are_parsed_and_depended_on():
+    """`create type` in a script, and the unit that uses it.
+
+    Before this, `DbType` could only arrive from a dictionary extract, so a
+    repository-only analysis declared USES_TYPE in its vocabulary and could
+    never emit it.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        graph = _analyze(Path(tmp))
+
+    types = _named(graph, 'DbType')
+    assert 'ORDER_LINE_T' in types, sorted(types)
+    assert types['ORDER_LINE_T'].properties['typeCategory'] == 'OBJECT'
+    assert ('LINE_SUBTOTAL', 'ORDER_LINE_T') in _rel_pairs(graph, 'USES_TYPE')
+
+
+def test_type_positions_exclude_column_and_row_anchors():
+    """`v_x CUSTOMERS.NAME%TYPE` references a column, not a type.
+
+    The scanner is deliberately liberal, but an anchored declaration is not a
+    type reference at all, and a scalar never resolves to a schema object.
+    """
+    from oracle_analyzer.parsers.programs import (_BUILTIN_TYPES,     # noqa: E402
+                                                  _TYPE_POSITION_RE)
+
+    def candidates(text):
+        found = set()
+        for match in _TYPE_POSITION_RE.finditer(text):
+            token = next((g for g in match.groups() if g), '').strip('" ').upper()
+            if token and token.rsplit('.', 1)[-1] not in _BUILTIN_TYPES:
+                found.add(token)
+        return found
+
+    assert candidates('v_name CUSTOMERS.NAME%TYPE;') == set()
+    assert candidates('v_row CUSTOMERS%ROWTYPE;') == set()
+    assert candidates('v_n NUMBER; v_s VARCHAR2(30); v_d DATE;') == set()
+
+    assert candidates('v_line ORDER_LINE_T;') == {'ORDER_LINE_T'}
+    assert candidates('PROCEDURE P(p IN ORDER_LINE_T) AS') == {'ORDER_LINE_T'}
+    assert candidates('FUNCTION F RETURN ORDER_LINE_T AS') == {'ORDER_LINE_T'}
+    assert candidates('TYPE t IS TABLE OF ORDER_LINE_T;') == {'ORDER_LINE_T'}
+    assert candidates('v_x ORDER_APP.ORDER_LINE_T;') == {'ORDER_APP.ORDER_LINE_T'}
+
+
+def test_object_attribute_access_is_not_a_call():
+    """`RETURN v_line.UNIT_PRICE;` is a field read, not a call to V_LINE.
+
+    A parameterless call is a statement of its own; the same shape after an
+    operator is attribute access, and counting it leaves an unresolvable
+    reference that never existed.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        graph = _analyze(Path(tmp))
+
+    unresolved = {node.name for node in graph.by_label('UnresolvedRef')}
+    assert 'V_LINE.UNIT_PRICE' not in unresolved, sorted(unresolved)
+    assert unresolved == {'LEGACY_UTIL.CLEANUP'}
+
+
+def test_column_references_are_bound_to_real_columns():
+    """Column-level lineage, and nothing invented: every REFERENCES_COLUMN
+    target must be a column that exists on a table in scope."""
+    with tempfile.TemporaryDirectory() as tmp:
+        graph = _analyze(Path(tmp))
+
+    edges = [r for r in graph.rels if r.rel_type == 'REFERENCES_COLUMN']
+    assert edges, 'no column references bound'
+    for rel in edges:
+        assert graph.nodes[rel.start_id].label == 'SqlStatement'
+        assert graph.nodes[rel.end_id].label == 'DbColumn'
+
+    columns = {graph.nodes[r.end_id].name for r in edges}
+    assert {'CUSTOMER_ID', 'NAME'} <= columns, sorted(columns)
+
+
+def test_joins_are_edges_not_just_a_count():
+    """A join says two tables are queried together. A single-table statement
+    has none, or every read would look like a join."""
+    with tempfile.TemporaryDirectory() as tmp:
+        graph = _analyze(Path(tmp))
+
+    by_statement = {}
+    for rel in graph.rels:
+        if rel.rel_type == 'JOINS':
+            by_statement.setdefault(rel.start_id, set()).add(rel.end_id)
+
+    assert by_statement, 'no join edges'
+    for statement_id, targets in by_statement.items():
+        assert len(targets) > 1, 'a join needs more than one table'
+        assert graph.nodes[statement_id].properties.get('tableCount', 0) > 1
+
+
+# ── source locations ──────────────────────────────────────────────────
+def test_code_nodes_carry_a_full_line_range_and_a_language():
+    """`lineStart` alone locates the beginning of a finding but not its extent."""
+    with tempfile.TemporaryDirectory() as tmp:
+        graph = _analyze(Path(tmp))
+
+    for label in ('DbProgramUnit', 'DbTable', 'DbTrigger', 'File'):
+        for node in graph.by_label(label):
+            properties = node.properties
+            assert properties.get('lineEnd'), f'{label} {node.name} has no lineEnd'
+            assert properties['lineEnd'] >= properties['lineStart'], node.name
+            assert properties.get('language'), f'{label} {node.name} has no language'
+
+
+def test_units_in_one_package_body_get_distinct_line_ranges():
+    """Every unit in a body used to inherit the package's own start line, which
+    points a reader at the top of the file whichever unit is at fault."""
+    with tempfile.TemporaryDirectory() as tmp:
+        graph = _analyze(Path(tmp))
+
+    starts = [node.properties['lineStart']
+              for node in graph.by_label('DbProgramUnit')
+              if node.properties.get('packageName') == 'CUSTOMER_PKG'
+              and not node.properties.get('declaredOnly')]
+    assert len(starts) == len(set(starts)), starts
+
+
+def test_files_record_when_they_were_last_modified():
+    with tempfile.TemporaryDirectory() as tmp:
+        graph = _analyze(Path(tmp))
+
+    for node in graph.by_label('File'):
+        assert node.properties.get('lastModified'), node.name
+
+
+# ── git provenance ────────────────────────────────────────────────────
+def test_git_history_is_found_when_the_source_root_is_a_subdirectory():
+    """`git log` reports repository-relative paths; the graph keys files from
+    the analysed root. Without stripping the prefix nothing matches and the
+    layer reports no history, which reads as "this tree has none"."""
+    if not (REPO_ROOT / '.git').exists():
+        return                       # not a checkout; nothing to assert
+    with tempfile.TemporaryDirectory() as tmp:
+        graph = _analyze(Path(tmp))
+
+    assert graph.meta['parserStats']['commits'] > 0,         'no commits matched: the path prefix is not being stripped'
+    assert graph.by_label('Commit'), 'no Commit nodes'
+    assert graph.by_label('Developer'), 'no Developer nodes'
+
+    changed = [r for r in graph.rels if r.rel_type == 'CHANGED']
+    assert changed, 'no CHANGED edges'
+    for rel in changed:
+        assert graph.nodes[rel.end_id].label == 'File'
+
+
+def test_churn_reaches_the_objects_defined_in_a_file():
+    """`CodeMetric.commitCount` read a property objects never carried, so churn
+    was always zero however much history the layer found. An object's churn is
+    the churn of the file that defines it."""
+    if not (REPO_ROOT / '.git').exists():
+        return
+    with tempfile.TemporaryDirectory() as tmp:
+        graph = _analyze(Path(tmp))
+
+    metrics = [node for node in graph.by_label('CodeMetric')
+               if node.properties.get('commitCount')]
+    assert metrics, 'no object carries churn'
+
+    # A package spans two files and has no path of its own; it takes the
+    # larger of its halves rather than reporting nothing.
+    packages = [node for node in graph.by_label('DbPackage')
+                if node.properties.get('commitCount')]
+    assert packages, 'package churn did not follow its halves'
+
+
+def test_commit_counts_reach_the_files_they_touched():
+    if not (REPO_ROOT / '.git').exists():
+        return
+    with tempfile.TemporaryDirectory() as tmp:
+        graph = _analyze(Path(tmp))
+
+    counted = [node for node in graph.by_label('File')
+               if node.properties.get('commitCount')]
+    assert counted, 'no file carries a commit count'
 
 
 if __name__ == '__main__':

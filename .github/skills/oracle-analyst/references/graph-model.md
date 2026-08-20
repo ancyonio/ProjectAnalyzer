@@ -46,6 +46,9 @@ break callers?* — unanswerable. A unit reachable from outside carries
 | Where does this synonym point? | `(:DbSynonym)-[:RESOLVES_TO]->(target)` |
 | What could the analysis not resolve? | `(src)-[:UNRESOLVED]->(:UnresolvedRef)` |
 | What did this release change? | `(:Commit)-[:CHANGED]->(:File)-[:DEFINES]->(object)` |
+| What touches this column? | `(:SqlStatement)-[:REFERENCES_COLUMN]->(:DbColumn)` |
+| Which tables are queried together? | `(:SqlStatement)-[:JOINS]->(:DbTable)` |
+| What depends on this user-defined type? | `(:DbProgramUnit)-[:USES_TYPE]->(:DbType)` |
 
 ### Both the verb and the roll-up
 
@@ -112,9 +115,29 @@ production but still in source control, a column added by a hotfix that never ca
 back — and the disagreement is itself a finding. `graph.meta.coverage.dictionaryAvailable`
 says which kind of graph you are holding.
 
+## Source locations
+
+Every code node carries `filePath`, `lineStart`, `lineEnd` and `language`, so a
+finding can name a range rather than a starting point. Units inside a package
+body each get their own range; they do not share the package's. `File` nodes
+also carry `lastModified`, which dates the working copy — a checkout rewrites
+mtimes, so use `commitCount` from the Git layer for how often something really
+changes.
+
 ## What is deliberately not modelled
 
 Local variables and constants, individual parameters, cursors and user-defined
-exceptions (all Phase 2 in `docs/ORACLE_ANALYZER_SPEC.md` §3.4), lines and tokens.
-Modelling every local declaration inflates node count by roughly an order of
-magnitude and buries the structure that matters.
+exceptions; lines and tokens. Modelling every local declaration inflates node
+count by roughly an order of magnitude and buries the structure that matters.
+
+Column-to-column flow is also absent. `REFERENCES_COLUMN` records that a
+statement names a column, not that one column populates another — see
+[data-lineage.md](data-lineage.md).
+
+Business capabilities and test cases are not modelled either, and not because
+they were forgotten: nothing in an Oracle source tree states them, so the only
+way to produce them would be to infer them from names. Every node in this graph
+comes from a statement in a script or a row in a dictionary extract, and a
+guessed node is indistinguishable from a parsed one once it is in the database.
+Where a business layer exists it is built by `estate_analyzer`, from evidence
+the APEX and TIBCO exports actually carry.

@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 from collections import Counter
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -36,7 +37,32 @@ class SourceFile:
     node_id: str = ''
     line_count: int = 0
     source_hash: str = ''
+    last_modified: str = ''
     objects: List[str] = field(default_factory=list)
+
+
+# Extension -> the language a reader should expect. The DDL extensions hold
+# statements; the program extensions hold PL/SQL.
+_LANGUAGE: Dict[str, str] = {
+    '.pks': 'PLSQL', '.pkb': 'PLSQL', '.pls': 'PLSQL', '.plsql': 'PLSQL',
+    '.prc': 'PLSQL', '.fnc': 'PLSQL', '.trg': 'PLSQL', '.pkg': 'PLSQL',
+}
+
+
+def _modified_at(path: Path) -> str:
+    """Filesystem mtime, ISO-8601 UTC.
+
+    A checkout rewrites mtimes, so this dates the working copy, not the change;
+    `commitCount` from the Git layer is the authority on how often a file
+    really changes. This is here so a report can say how stale the analysed
+    tree is.
+    """
+    try:
+        stamp = path.stat().st_mtime
+    except OSError:
+        return ''
+    return datetime.fromtimestamp(stamp, tz=timezone.utc).isoformat(
+        timespec='seconds')
 
 
 def _looks_like_oracle(text: str) -> bool:
@@ -92,6 +118,7 @@ class SourceScanMixin:
                 text=text,
                 line_count=text.count('\n') + 1,
                 source_hash=sha1_16(text),
+                last_modified=_modified_at(path),
             )
             source.node_id = file_id(rel_path)
             files.append(source)
@@ -113,9 +140,13 @@ class SourceScanMixin:
             self._add_node(GraphNode(source.node_id, 'File', Path(source.rel_path).name, {
                 'filePath': source.rel_path,
                 'kind': source.kind,
+                'lineStart': 1,
+                'lineEnd': source.line_count,
+                'language': _LANGUAGE.get(source.path.suffix.lower(), 'SQL'),
                 'loc': source.line_count,
                 'sourceHash': source.source_hash,
                 'extension': source.path.suffix.lower(),
+                'lastModified': source.last_modified,
             }))
             self._add_rel(self.repository_id, source.node_id, 'CONTAINS_FILE',
                           purpose='repository-membership')

@@ -8,7 +8,8 @@ can never disagree about what a label or a relationship means.
 The vocabulary deliberately reuses the names `apex_analyzer` already uses for
 the database layer (`DbTable`, `READS_FROM`, `HAS_UNIT`, …). A second spelling
 for the same concept would split every cross-analyzer query and force two
-configurations of the shared engines. See docs/ORACLE_ANALYZER_SPEC.md §1.
+configurations of the shared engines. The vocabulary is documented for agents
+in `.github/skills/oracle-analyst/references/graph-model.md`.
 """
 from __future__ import annotations
 
@@ -61,7 +62,7 @@ DEPENDENCY_RELS: Set[str] = {
 
 DATA_ACCESS_RELS: Set[str] = {
     'READS_FROM', 'INSERTS_INTO', 'UPDATES', 'DELETES_FROM', 'WRITES_TO',
-    'REFERENCES_COLUMN',
+    'REFERENCES_COLUMN', 'JOINS',
 }
 
 RUNTIME_RELS: Set[str] = {'FIRES_ON', 'EXECUTES_SQL', 'EXECUTES_PLSQL'}
@@ -140,6 +141,9 @@ REL_IMPACT_WEIGHTS: Dict[str, float] = {
     'UPDATES': 0.9,
     'DELETES_FROM': 0.9,
     'REFERENCES_COLUMN': 0.7,
+    # A join says two tables are queried together, which is a weaker signal
+    # than reading one: the shape of the query changes, the data does not.
+    'JOINS': 0.4,
     # declared dependencies
     'DEPENDS_ON': 0.85,
     'FIRES_ON': 0.9,

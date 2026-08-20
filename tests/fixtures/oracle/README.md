@@ -11,4 +11,8 @@ the analyzer's boundaries are asserted rather than assumed:
 - a call to `LEGACY_UTIL.CLEANUP`, which is **not** in the tree, so resolution
   coverage is asserted below 100%
 - a private body unit nothing calls, so dead-code detection has a target
+- a `create type` and a function that declares it, so `USES_TYPE` has a target
+  and object-attribute access is asserted not to read as a call
+- a two-table `INSERT ... SELECT`, so `JOINS` fires and a single-table read
+  is asserted not to
 - a credential in `deploy/install.sql`, asserted never to reach the graph

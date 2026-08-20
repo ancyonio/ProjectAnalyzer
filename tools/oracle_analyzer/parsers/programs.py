@@ -14,8 +14,9 @@ so calls and table references are recorded for `crossref` to resolve.
 from __future__ import annotations
 
 import logging
+import re
 from collections import Counter
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
 from analyzer_core.ids import object_id, plsql_id, sql_id, unit_id
 from analyzer_core.model import GraphNode
@@ -28,6 +29,40 @@ logger = logging.getLogger('oracle_analyzer')
 
 _BRANCH_TOKENS = (' if ', ' elsif ', ' case ')
 _LOOP_TOKENS = (' loop ', ' while ', ' for ')
+
+# Positions where a type name can legally appear: a function's return, a
+# collection's element type, a cast target, a constructor call, and the type
+# half of a parameter or variable declaration.
+#
+# Deliberately liberal, on the same principle as the SQL column binder: a
+# candidate that is not a `DbType` in scope is dropped by `crossref`, so
+# over-collecting here costs nothing while under-collecting loses the
+# dependency. `%TYPE` and `%ROWTYPE` anchors are excluded by the lookahead --
+# those reference a column or a table, not a type.
+_TYPE_POSITION_RE = re.compile(
+    r'\bRETURN\s+([A-Za-z][\w$#]*(?:\.[\w$#]+)?)'
+    r'|\bTABLE\s+OF\s+([A-Za-z][\w$#]*(?:\.[\w$#]+)?)'
+    r'|\bREF\s+([A-Za-z][\w$#]*(?:\.[\w$#]+)?)'
+    r'|\bAS\s+([A-Za-z][\w$#]*(?:\.[\w$#]+)?)\s*\)'
+    r'|\bNEW\s+([A-Za-z][\w$#]*(?:\.[\w$#]+)?)\s*\('
+    r'|\b[\w$#]+\s+(?:IN\s+OUT\s+NOCOPY|IN\s+OUT|OUT\s+NOCOPY|IN|OUT)\s+'
+    r'([A-Za-z][\w$#]*(?:\.[\w$#]+)?)\s*(?=[;,)]|:=|\bDEFAULT\b)'
+    r'|\b[\w$#]+\s+([A-Za-z][\w$#]*(?:\.[\w$#]+)?)\s*(?=[;,)]|:=|\bDEFAULT\b)',
+    re.IGNORECASE)
+
+# Scalar and built-in types are not objects in the schema, so they would never
+# resolve. Excluding them keeps the deferred queue proportional to the code.
+_BUILTIN_TYPES = frozenset({
+    'NUMBER', 'VARCHAR2', 'VARCHAR', 'CHAR', 'NCHAR', 'NVARCHAR2', 'DATE',
+    'TIMESTAMP', 'CLOB', 'BLOB', 'NCLOB', 'BFILE', 'RAW', 'LONG', 'INTEGER',
+    'INT', 'SMALLINT', 'DECIMAL', 'NUMERIC', 'FLOAT', 'REAL', 'DOUBLE',
+    'BINARY_INTEGER', 'PLS_INTEGER', 'BINARY_FLOAT', 'BINARY_DOUBLE',
+    'BOOLEAN', 'ROWID', 'UROWID', 'INTERVAL', 'XMLTYPE', 'SYS_REFCURSOR',
+    'REFCURSOR', 'RECORD', 'CURSOR', 'EXCEPTION', 'CONSTANT', 'DEFAULT',
+    'NULL', 'IS', 'AS', 'BEGIN', 'END', 'THEN', 'ELSE', 'LOOP', 'DECLARE',
+    'PROCEDURE', 'FUNCTION', 'PRAGMA', 'RETURN', 'SELECT', 'INTO', 'FROM',
+    'WHERE', 'VALUES', 'SET', 'AND', 'OR', 'NOT', 'IN', 'OUT', 'NOCOPY',
+})
 
 
 class ProgramParserMixin:
@@ -75,12 +110,16 @@ class ProgramParserMixin:
             return 0
         self.stats['package_halves'] += 1
 
+        half_loc = (source_text or '').count('\n') + 1 if source_text else 0
         self._add_node(GraphNode(half_node, half_label, obj.name, {
             'owner': owner,
             'packageName': obj.name,
             'filePath': source.rel_path,
             'lineStart': obj.source_line,
-            'loc': (source_text or '').count('\n') + 1 if source_text else 0,
+            'lineEnd': obj.source_line_end or (obj.source_line
+                                               + max(0, half_loc - 1)),
+            'language': 'PLSQL',
+            'loc': half_loc,
             'sourceHash': source.source_hash,
             'origin': 'ddl',
         }))
@@ -138,12 +177,15 @@ class ProgramParserMixin:
                          body: str, base_line: int) -> int:
         seen: Counter = Counter()
         created = 0
-        for kind, name, unit_source in extract_unit_bodies(body):
+        for kind, name, unit_source, offset in extract_unit_bodies(body):
             seen[name] += 1
             overload = seen[name] if seen[name] > 1 else None
             node_id = unit_id(owner, package, name, overload)
+            # `offset` is the unit's first line within the body. Without it
+            # every unit in a package reports the package's own start line,
+            # which points a reader at the wrong end of the file.
             self._create_unit(source, node_id, owner, package, kind, name,
-                              unit_source, base_line, overload,
+                              unit_source, base_line + offset, overload,
                               standalone=False, parent=body_node)
             created += 1
         return created
@@ -190,6 +232,8 @@ class ProgramParserMixin:
             'declaredOnly': False,
             'filePath': source.rel_path,
             'lineStart': base_line,
+            'lineEnd': base_line + max(0, loc - 1),
+            'language': 'PLSQL',
             'loc': loc,
             'sourceHash': self._hash(unit_source or ''),
             'statementCount': len(analysis.statements),
@@ -220,6 +264,7 @@ class ProgramParserMixin:
                           purpose='source-definition')
             source.objects.append(node_id)
 
+        self._collect_type_refs(node_id, owner, unit_source or '')
         self._attach_code(node_id, owner, analysis, source, unit_source or '')
 
     # ── SQL and PL/SQL code nodes ─────────────────────────────────────
@@ -241,6 +286,7 @@ class ProgramParserMixin:
                     'normalised': self._truncate(normalised, 2000),
                     'hasNoWhere': (statement.verb in ('UPDATE', 'DELETE')
                                    and ' where ' not in f' {normalised} '),
+                    'language': 'SQL',
                     'origin': 'ddl',
                 })
                 self._add_node(GraphNode(statement_node, 'SqlStatement',
@@ -257,6 +303,7 @@ class ProgramParserMixin:
             for seq_owner, seq_name in statement.sequences:
                 self.deferred_sequences.append(
                     (owner_node, seq_owner or owner, seq_name))
+            self._defer_statement_detail(statement_node, owner, statement)
 
         for package, name in analysis.calls:
             self.deferred_calls.append((owner_node, owner, package, name))
@@ -267,9 +314,56 @@ class ProgramParserMixin:
         if block_node not in self.nodes:
             properties = dict(analysis.properties())
             properties['text'] = self._truncate(text)
+            properties['language'] = 'PLSQL'
             properties['origin'] = 'ddl'
             self._add_node(GraphNode(block_node, 'PlsqlBlock',
                                      f'PL/SQL {block_node.split(":", 1)[1][:8]}',
                                      properties))
         self._add_rel(owner_node, block_node, 'EXECUTES_PLSQL',
                       purpose='unit-body')
+
+    # ── deferred detail ───────────────────────────────────────────────
+    def _defer_statement_detail(self, statement_node: str, owner: str,
+                                statement) -> None:
+        """Column references and join partners, for `crossref` to bind.
+
+        Columns are recorded per statement rather than per unit because that is
+        the granularity at which the reference actually exists: two units
+        running the same query converge on one `SqlStatement`, and the columns
+        belong to the query, not to either caller.
+        """
+        if statement.columns:
+            # One entry per statement, not per column: the alias map and the
+            # table list are properties of the query, and copying them beside
+            # every column candidate is the same data many times over.
+            self.deferred_columns.append(
+                (statement_node, owner, tuple(statement.columns),
+                 dict(statement.alias_map),
+                 tuple((t.owner, t.name) for t in statement.tables)))
+
+        # A join only exists between two tables, so a single-table statement
+        # has none. Recording one anyway would make every read look like a join.
+        distinct = {(t.owner, t.name) for t in statement.tables}
+        if len(distinct) > 1:
+            for table_owner, table_name in sorted(distinct):
+                self.deferred_joins.append(
+                    (statement_node, table_owner or owner, table_name))
+
+    def _collect_type_refs(self, source_node: str, owner: str,
+                           text: str) -> None:
+        """Candidate user-defined type names used by a unit or trigger body."""
+        if not text:
+            return
+        seen: Set[str] = set()
+        for match in _TYPE_POSITION_RE.finditer(text):
+            token = next((group for group in match.groups() if group), '')
+            token = token.strip().strip('"').upper()
+            if not token or token in seen:
+                continue
+            bare = token.rsplit('.', 1)[-1]
+            if bare in _BUILTIN_TYPES or token in _BUILTIN_TYPES:
+                continue
+            seen.add(token)
+            type_owner, _, type_name = token.rpartition('.')
+            self.deferred_types.append(
+                (source_node, type_owner or owner, type_name))

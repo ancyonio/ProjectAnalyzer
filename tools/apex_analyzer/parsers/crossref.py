@@ -284,7 +284,7 @@ class CrossReferenceMixin:
             return
         if str(ref.get('type', '')).upper() in ('PACKAGE BODY', 'PACKAGE'):
             from .ddl import extract_unit_bodies
-            for kind, unit_name, body in extract_unit_bodies(ref['text']):
+            for kind, unit_name, body, _offset in extract_unit_bodies(ref['text']):
                 unit_node = self._db_program_unit(owner, name, unit_name,
                                                   {'unitKind': kind, 'isStandalone': False})
                 self._plsql_code(unit_node, body, 'EXECUTES_PLSQL',

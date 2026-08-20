@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from itertools import chain
 from typing import Dict, FrozenSet, List, Optional, Set, Tuple
 
 from .constants import (BIND_RE, ORACLE_BUILTIN_PACKAGES, SQL_RESERVED,
@@ -25,7 +26,15 @@ from .sqlparse import SqlAnalysis, analyse_sql, strip_comments
 _STATEMENT_START_RE = re.compile(
     r'\b(SELECT|INSERT|UPDATE|DELETE|MERGE)\b', re.IGNORECASE)
 _CALL_RE = re.compile(
-    r'\b("?[A-Za-z][A-Za-z0-9_$#]*"?)\s*\.\s*("?[A-Za-z][A-Za-z0-9_$#]*"?)\s*[\(;]')
+    r'\b("?[A-Za-z][A-Za-z0-9_$#]*"?)\s*\.\s*("?[A-Za-z][A-Za-z0-9_$#]*"?)\s*\(')
+# `PKG.PROC;` is a call with no arguments, but it is a *statement*. Matching
+# that shape anywhere reads `RETURN v_rec.AMOUNT;` as a call to a package named
+# V_REC: an attribute of an object type is not a call, and counting it as one
+# leaves an unresolvable reference that never existed.
+_PARAMLESS_CALL_RE = re.compile(
+    r'(?:^|;|\bBEGIN\b|\bTHEN\b|\bELSE\b|\bLOOP\b)\s*'
+    r'("?[A-Za-z][A-Za-z0-9_$#]*"?)\s*\.\s*("?[A-Za-z][A-Za-z0-9_$#]*"?)\s*;',
+    re.IGNORECASE | re.MULTILINE)
 _BARE_CALL_RE = re.compile(r'(?:^|[\s;])([A-Za-z][A-Za-z0-9_$#]*)\s*\(', re.MULTILINE)
 _DYNAMIC_RE = re.compile(r'\b(EXECUTE\s+IMMEDIATE|DBMS_SQL\.|OPEN\s+\w+\s+FOR\s+\w)',
                          re.IGNORECASE)
@@ -140,7 +149,8 @@ def analyse_plsql(text: str,
     bare_tables = {name for _, name in table_names}
 
     seen_calls: Set[Tuple[str, str]] = set()
-    for match in _CALL_RE.finditer(masked):
+    for match in chain(_CALL_RE.finditer(masked),
+                       _PARAMLESS_CALL_RE.finditer(masked)):
         package = match.group(1).strip('"').upper()
         name = match.group(2).strip('"').upper()
         if package in SQL_RESERVED or name in SQL_RESERVED:

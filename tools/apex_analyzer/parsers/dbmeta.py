@@ -252,7 +252,7 @@ class DatabaseMetadataMixin:
                     'unitKind': kind, 'isStandalone': False, **source})
                 self._rel(file_node, unit_node, 'DEFINES')
             if obj.body:
-                for kind, unit_name, body in extract_unit_bodies(obj.body):
+                for kind, unit_name, body, _offset in extract_unit_bodies(obj.body):
                     unit_node = self._db_program_unit(owner, name, unit_name,
                                                       {'unitKind': kind,
                                                        'isStandalone': False, **source})

@@ -130,6 +130,42 @@ CYPHER_COOKBOOK: List[Dict[str, str]] = [
                   'ORDER BY Unit;',
     },
     {
+        'id': 'column-usage',
+        'title': 'What touches a column',
+        'purpose': 'The question a column rename or a type change starts with. '
+                   'Reports the statement and the unit that runs it; the graph '
+                   'does not claim which column feeds which.',
+        'cypher': 'MATCH (c:DbColumn {name: $columnName})<-[:REFERENCES_COLUMN]-(s:SqlStatement)\n'
+                  'OPTIONAL MATCH (u:DbProgramUnit)-[:EXECUTES_SQL]->(s)\n'
+                  'RETURN c.tableName AS Table, c.name AS Column,\n'
+                  '       collect(DISTINCT u.name) AS Units, s.verb AS Verb\n'
+                  'ORDER BY Table, Column;',
+    },
+    {
+        'id': 'join-partners',
+        'title': 'Tables that are queried together',
+        'purpose': 'Where a composite index or a denormalisation would pay. '
+                   'JOINS is only emitted when a statement combines more than '
+                   'one table, so a plain read never appears here.',
+        'cypher': 'MATCH (s:SqlStatement)-[:JOINS]->(t:DbTable)\n'
+                  'WITH s, collect(DISTINCT t.name) AS Tables\n'
+                  'WHERE size(Tables) > 1\n'
+                  'RETURN Tables, count(*) AS Statements\n'
+                  'ORDER BY Statements DESC\n'
+                  'LIMIT 25;',
+    },
+    {
+        'id': 'type-dependents',
+        'title': 'What depends on a user-defined type',
+        'purpose': 'A type change is a recompile for everything that declares '
+                   'it, and that dependency is invisible in the data-access '
+                   'edges.',
+        'cypher': 'MATCH (dependent)-[:USES_TYPE]->(t:DbType)\n'
+                  'RETURN t.name AS Type, t.typeCategory AS Category,\n'
+                  '       collect(dependent.name) AS Dependents\n'
+                  'ORDER BY Type;',
+    },
+    {
         'id': 'trigger-map',
         'title': 'Triggers and what they fire on',
         'purpose': 'Hidden control flow: a write to a table may run code the '
@@ -205,5 +241,6 @@ def render_cookbook() -> str:
 def render_markdown() -> str:
     return _render_markdown(
         CYPHER_COOKBOOK, TITLE,
-        intro='Set `$objectName` or `$unitName` in Neo4j Browser before running '
-              'a parameterised query, for example `:param objectName => "ORDERS"`.')
+        intro='Set `$objectName`, `$unitName` or `$columnName` in Neo4j Browser '
+              'before running a parameterised query, for example '
+              '`:param objectName => "ORDERS"`.')

@@ -38,7 +38,10 @@ class CrossReferenceMixin:
         edges += self._resolve_triggers()
         edges += self._resolve_view_dependencies()
         edges += self._resolve_data_access()
+        edges += self._resolve_columns()
+        edges += self._resolve_joins()
         edges += self._resolve_sequences()
+        edges += self._resolve_types()
         edges += self._resolve_calls()
         self._record_unresolved()
         logger.info('  %d cross-reference edge(s), %d unresolved',
@@ -194,6 +197,9 @@ class CrossReferenceMixin:
                      table.access, table.db_link))
         for package, name in analysis.calls:
             self.late_calls.append((trigger_node, owner, package, name))
+        # A trigger body is PL/SQL like any other, so it reaches types the same
+        # way. Resolution runs after this pass, so the queue is still open.
+        self._collect_type_refs(trigger_node, owner, body)
 
     # ── views ─────────────────────────────────────────────────────────
     def _resolve_view_dependencies(self) -> int:
@@ -248,6 +254,99 @@ class CrossReferenceMixin:
                 self._add_rel(source_node, target, rel_type,
                               purpose='data-access')
                 edges += 1
+        return edges
+
+    # ── column references ─────────────────────────────────────────────
+    def _resolve_columns(self) -> int:
+        """Bind a statement's column candidates to real `DbColumn` nodes.
+
+        Strict where the parser is liberal: a candidate that is not a column of
+        a table in scope simply produces no edge. That asymmetry is what makes
+        over-collection in the SQL parser safe, and it is why an unqualified
+        name is only bound when exactly one table could own it -- guessing
+        between two would put lineage on the wrong column, which is worse than
+        recording none.
+        """
+        edges = 0
+        seen: set = set()
+        for statement_node, owner, columns, aliases, tables in \
+                self.deferred_columns:
+            for qualifier, column in columns:
+                if qualifier:
+                    candidates = [(owner, aliases.get(qualifier.upper(),
+                                                      qualifier))]
+                else:
+                    candidates = [(table_owner or owner, table_name)
+                                  for table_owner, table_name in tables]
+                    if len(candidates) != 1:
+                        continue
+                for table_owner, table_name in candidates:
+                    target = self._find_object(table_owner, table_name)
+                    if not target or self.nodes[target].label not in (
+                            'DbTable', 'DbView', 'DbMaterializedView'):
+                        continue
+                    node = self.nodes[target]
+                    col_node = column_id(
+                        node.properties.get('owner', table_owner),
+                        node.name, column.upper())
+                    if col_node not in self.nodes:
+                        continue
+                    if (statement_node, col_node) not in seen:
+                        seen.add((statement_node, col_node))
+                        self._add_rel(statement_node, col_node,
+                                      'REFERENCES_COLUMN',
+                                      purpose='column-lineage')
+                        edges += 1
+                    break
+        self.stats['column_references'] = edges
+        return edges
+
+    # ── joins ─────────────────────────────────────────────────────────
+    def _resolve_joins(self) -> int:
+        """`JOINS` records that a statement combines a table with others.
+
+        `READS_FROM` already says the statement touches the table; only the
+        join edge says it was combined with something else, which is the edge a
+        query-shape or index review starts from.
+        """
+        edges = 0
+        seen: set = set()
+        for statement_node, owner, name in self.deferred_joins:
+            target = self._find_object(owner, name)
+            if not target or self.nodes[target].label not in (
+                    'DbTable', 'DbView', 'DbMaterializedView'):
+                continue
+            key = (statement_node, target)
+            if key in seen:
+                continue
+            seen.add(key)
+            self._add_rel(statement_node, target, 'JOINS',
+                          purpose='query-shape')
+            edges += 1
+        return edges
+
+    # ── user-defined types ────────────────────────────────────────────
+    def _resolve_types(self) -> int:
+        """Only a name that is a `DbType` in scope becomes an edge.
+
+        Everything else the type-position scanner offered was a scalar, a
+        keyword or a local, and is dropped without comment: an unresolved type
+        candidate is a parser artefact, not a missing dependency, so recording
+        it as unresolved would inflate the honest count of real gaps.
+        """
+        edges = 0
+        seen: set = set()
+        for source_node, owner, name in self.deferred_types:
+            target = self._find_object(owner, name)
+            if not target or self.nodes[target].label != 'DbType':
+                continue
+            if target == source_node or (source_node, target) in seen:
+                continue
+            seen.add((source_node, target))
+            self._add_rel(source_node, target, 'USES_TYPE',
+                          purpose='type-dependency')
+            edges += 1
+        self.stats['type_references'] = edges
         return edges
 
     @staticmethod
