@@ -42,6 +42,32 @@ def _analyze(tmp: Path, **kwargs) -> Graph:
     return OracleAnalyzer(FIXTURE, tmp, default_owner=OWNER, **kwargs).analyze()
 
 
+def _analyze_source(tmp: Path, sql: str) -> Graph:
+    """Analyze a throwaway one-file tree, so a test can seed a condition the
+    shared fixture must not carry."""
+    source = tmp / 'src'
+    source.mkdir(parents=True, exist_ok=True)
+    (source / 'thing.sql').write_text(sql, encoding='utf-8')
+    return OracleAnalyzer(source, tmp / 'out', default_owner=OWNER).analyze()
+
+
+# A CHECK constraint matches no pattern, and `select … from dual` yields a
+# statement with no table. Both are real conditions and both are invisible in
+# a node count.
+DEGRADED_SQL = """CREATE TABLE ORDER_APP.T (ID NUMBER, STATUS VARCHAR2(10));
+
+ALTER TABLE ORDER_APP.T ADD CONSTRAINT T_CK CHECK (STATUS IN ('A','C'));
+
+CREATE OR REPLACE PROCEDURE ORDER_APP.P AS
+  v_now DATE;
+BEGIN
+  SELECT SYSDATE INTO v_now FROM DUAL;
+  SELECT SYSTIMESTAMP INTO v_now FROM DUAL;
+END;
+/
+"""
+
+
 def _named(graph: Graph, label: str):
     return {node.name: node for node in graph.by_label(label)}
 
@@ -710,6 +736,80 @@ def test_test_units_are_not_business_functions():
 
     functions = set(_named(graph, 'BusinessFunction'))
     assert not functions & {'CREATE_CUSTOMER_OK', 'DELETE_CUSTOMER_OK'}
+
+
+# ── parse quality ─────────────────────────────────────────────────────
+def test_parse_quality_is_reported_alongside_resolution():
+    with tempfile.TemporaryDirectory() as tmp:
+        coverage = _analyze(Path(tmp)).meta['coverage']
+
+    for key in ('codeNodes', 'statementsParsed', 'statementsPartial',
+                'statementsFailed', 'parseQuality', 'ddlStatements',
+                'ddlUnparsed'):
+        assert key in coverage, f'{key} missing from coverage'
+
+    assert coverage['parseQuality'] == 100.0
+    assert coverage['statementsPartial'] == 0
+    assert coverage['statementsFailed'] == 0
+    assert coverage['ddlUnparsed'] == 0
+    assert coverage['statementsParsed'] == coverage['codeNodes']
+
+
+def test_parse_quality_counts_each_parse_once():
+    """A program unit carries its own block's status verbatim. Counting units
+    as well as blocks would count the same parse twice and flatter the figure."""
+    with tempfile.TemporaryDirectory() as tmp:
+        graph = _analyze(Path(tmp))
+
+    counted = len(graph.by_label('SqlStatement')) + len(graph.by_label('PlsqlBlock'))
+    assert graph.meta['coverage']['codeNodes'] == counted
+    assert graph.by_label('DbProgramUnit'), 'fixture has no units to double-count'
+
+
+def test_a_graph_that_resolves_perfectly_can_still_have_read_little():
+    """The reason this figure exists. Resolution measures whether names bound;
+    it says nothing about how much of the code was read to find them."""
+    with tempfile.TemporaryDirectory() as tmp:
+        coverage = _analyze_source(Path(tmp), DEGRADED_SQL).meta['coverage']
+
+    assert coverage['resolutionCoverage'] == 100.0     # every name bound
+    assert coverage['parseQuality'] < 90.0             # very little was read
+    assert coverage['statementsPartial'] >= 2
+    assert coverage['ddlUnparsed'] >= 1
+
+
+def test_the_parse_quality_gate_warns():
+    with tempfile.TemporaryDirectory() as tmp:
+        graph = _analyze_source(Path(tmp), DEGRADED_SQL)
+        result = GraphValidator(graph, validation_config(), Path(tmp)).run()
+
+    by_rule = {f['rule']: f for f in result['findings']}
+    assert by_rule['parse-quality']['severity'] == 'WARNING', by_rule['parse-quality']
+    assert by_rule['unparsed-ddl']['severity'] in ('WARNING', 'INFO')
+
+
+def test_the_context_banner_warns_before_it_reassures():
+    """An agent that reads "100% resolved" first stops reading. The parse
+    warning has to reach it before the resolution line does."""
+    from oracle_analyzer.report.contextpack import estate_facts   # noqa: E402
+
+    with tempfile.TemporaryDirectory() as tmp:
+        banner = estate_facts(_analyze_source(Path(tmp), DEGRADED_SQL))
+
+    assert 'Parse quality is' in banner, banner[:400]
+    assert 'Do not read it as completeness' in banner
+    assert 'matched no known pattern' in banner
+
+
+def test_a_clean_parse_reports_info_not_a_warning():
+    """The gate has to distinguish good from bad, not just fire."""
+    with tempfile.TemporaryDirectory() as tmp:
+        graph = _analyze(Path(tmp))
+        result = GraphValidator(graph, validation_config(), Path(tmp)).run()
+
+    by_rule = {f['rule']: f for f in result['findings']}
+    assert by_rule['parse-quality']['severity'] == 'INFO'
+    assert 'unparsed-ddl' not in by_rule       # silent when there is nothing to say
 
 
 if __name__ == '__main__':

@@ -15,6 +15,11 @@ from analyzer_core.graph.validate import Finding
 from analyzer_core.model import Graph
 
 MIN_RESOLUTION = 80.0
+# Below this the parser is losing code, not just failing to bind names. Set
+# higher than the resolution gate on purpose: an unresolved name is often a
+# genuinely absent object, whereas a statement the parser could not read is
+# always the parser's problem.
+MIN_PARSE_QUALITY = 90.0
 
 
 def package_body_without_spec(graph: Graph) -> List[Finding]:
@@ -151,6 +156,58 @@ def test_coverage(graph: Graph) -> List[Finding]:
                     f'{len(cases)} test case(s) cover every entry point')]
 
 
+def parse_quality(graph: Graph) -> List[Finding]:
+    """Did the parser understand the code, not just bind the names it found?
+
+    `resolution-coverage` measures whether references resolved. This measures
+    the step before it. The two fail independently and the difference matters:
+    a graph that reads 40% of its statements can still resolve every name it
+    managed to extract and report full coverage, which is the most flattering
+    possible summary of the least useful graph.
+    """
+    coverage = (graph.meta or {}).get('coverage') or {}
+    total = coverage.get('codeNodes')
+    if not total:
+        return []
+
+    value = coverage.get('parseQuality', 100.0)
+    partial = coverage.get('statementsPartial', 0)
+    failed = coverage.get('statementsFailed', 0)
+    unparsed = coverage.get('ddlUnparsed', 0)
+    detail = [f"parsed: {coverage.get('statementsParsed')}/{total}",
+              f'partial: {partial}', f'failed: {failed}',
+              f"unparsed DDL: {unparsed}/{coverage.get('ddlStatements', 0)}"]
+
+    if value < MIN_PARSE_QUALITY:
+        return [Finding('WARNING', 'parse-quality',
+                        f'Parse quality is {value}% - below '
+                        f'{MIN_PARSE_QUALITY}% the graph describes less of the '
+                        f'code than its resolution figure suggests', detail)]
+    if failed:
+        return [Finding('WARNING', 'parse-quality',
+                        f'{failed} code node(s) failed to parse; their '
+                        f'dependencies are absent from the graph', detail)]
+    return [Finding('INFO', 'parse-quality',
+                    f'Parse quality {value}%', detail)]
+
+
+def unparsed_ddl(graph: Graph) -> List[Finding]:
+    """DDL the splitter produced but no pattern claimed.
+
+    These create nothing, so they leave no trace in a node count. A file of
+    unsupported DDL and a file of nothing look identical without this.
+    """
+    coverage = (graph.meta or {}).get('coverage') or {}
+    unparsed = coverage.get('ddlUnparsed', 0)
+    if not unparsed:
+        return []
+    total = coverage.get('ddlStatements', 0)
+    severity = 'WARNING' if total and unparsed * 100.0 / total > 10 else 'INFO'
+    return [Finding(severity, 'unparsed-ddl',
+                    f'{unparsed} of {total} DDL statement(s) matched no known '
+                    f'pattern and produced no node')]
+
+
 def invalid_objects(graph: Graph) -> List[Finding]:
     invalid = [n.name for n in graph.nodes.values()
                if str(n.properties.get('status', '')).upper() == 'INVALID']
@@ -171,6 +228,8 @@ def dynamic_sql_declared(graph: Graph) -> List[Finding]:
 
 
 ORACLE_RULES = [
+    parse_quality,
+    unparsed_ddl,
     business_seed_is_grounded,
     test_coverage,
     package_body_without_spec,

@@ -96,9 +96,21 @@ def cmd_analyze(args: argparse.Namespace) -> int:
           f"/{coverage['callsResolved'] + coverage['callsUnresolved']}"
           f" ({coverage['callResolution']}%)")
     print(f"   dynamic SQL sites        : {coverage['dynamicSqlSites']}")
+    print(f"   code parsed              : {coverage['statementsParsed']}"
+          f"/{coverage['codeNodes']}"
+          f" ({coverage['parseQuality']}%)"
+          f"  partial={coverage['statementsPartial']}"
+          f" failed={coverage['statementsFailed']}")
+    print(f"   DDL statements parsed    : "
+          f"{coverage['ddlStatements'] - coverage['ddlUnparsed']}"
+          f"/{coverage['ddlStatements']}"
+          f"  unparsed={coverage['ddlUnparsed']}")
     if coverage['resolutionCoverage'] < 80:
         print('\n  Resolution is below 80%: the graph is provisional and every '
               'answer drawn from it must say so.')
+    if coverage['parseQuality'] < 90:
+        print('\n  Parse quality is below 90%: the names that did bind may still '
+              'be an incomplete picture of what the code does.')
     _print_next('oracle-analyze', args)
     return 0
 
@@ -147,6 +159,7 @@ def cmd_inventory(args: argparse.Namespace) -> int:
     print(f"   resolution               : {coverage.get('resolutionCoverage')}%")
     print(f"   call resolution          : {coverage.get('callResolution')}%")
     print(f"   dynamic SQL sites        : {coverage.get('dynamicSqlSites')}")
+    print(f"   parse quality            : {coverage.get('parseQuality')}%")
     print(f"   unresolved references    : {summary['unresolvedReferences']}")
 
     if inventory['schemas']:

@@ -60,26 +60,55 @@ target and a read of the source. Recording only the write loses half the lineage
 
 ```json
 {
-  "objectsDiscovered": 21,
-  "objectsModelled": 20,
-  "resolutionCoverage": 95.2,
-  "callsResolved": 2,
+  "objectsDiscovered": 26,
+  "objectsModelled": 25,
+  "resolutionCoverage": 96.2,
+  "callsResolved": 4,
   "callsUnresolved": 1,
-  "callResolution": 66.7,
+  "callResolution": 80.0,
   "dynamicSqlSites": 1,
   "dictionaryAvailable": false,
-  "unresolvedReferences": ["LEGACY_UTIL.CLEANUP"]
+  "unresolvedReferences": ["LEGACY_UTIL.CLEANUP"],
+  "codeNodes": 19,
+  "statementsParsed": 19,
+  "statementsPartial": 0,
+  "statementsFailed": 0,
+  "parseQuality": 100.0,
+  "ddlStatements": 22,
+  "ddlUnparsed": 0
 }
 ```
 
-Two figures, and they answer different questions:
+Three figures, answering three different questions — in this order, because
+each one is measured over whatever the one before it produced:
 
-- **`resolutionCoverage`** — how much of what the analysis saw became a modelled
-  object. Low means names were referenced that the tree never defined.
-- **`callResolution`** — how much of the call graph bound to a target. Low means the
-  call graph, and therefore every blast radius drawn from it, is incomplete.
+- **`parseQuality`** — how much of the code the parser actually read.
+  `PARSED` / `PARTIAL` / `FAILED` over `SqlStatement` and `PlsqlBlock`. This is
+  the figure to read **first**, because the two below are measured over the code
+  that parsed, not over the code that exists. Below 90 % the validator raises
+  `parse-quality`.
+- **`resolutionCoverage`** — how much of what the parser extracted became a
+  modelled object. Low means names were referenced that the tree never defined.
+- **`callResolution`** — how much of the call graph bound to a target. Low means
+  the call graph, and therefore every blast radius drawn from it, is incomplete.
 
-Below 80 % on either, the validator raises `resolution-coverage` and the graph is
-provisional. Quote the number when the question is about completeness — "95 % of
-objects resolved; the one that did not is listed" is an answer, "the estate uses five
-tables" alone is not.
+`ddlUnparsed` sits beside them and is not a percentage of anything: those are
+statements that matched no pattern and created **nothing**, so they leave no
+trace in any node count. A file of unsupported DDL and an empty file look
+identical without it.
+
+Below 80 % on either resolution figure the validator raises
+`resolution-coverage` and the graph is provisional.
+
+### Why the order matters
+
+A graph can report **100 % resolution and 100 % call resolution** while having
+read a third of its code: every name the parser managed to extract bound
+perfectly, and the rest was never seen. That is the most flattering possible
+summary of the least useful graph, and it is exactly what `parseQuality`
+exists to contradict. The context-pack banner states it before the resolution
+line for the same reason.
+
+Quote the numbers when the question is about completeness — "96 % of objects
+resolved from 100 % of the code, and the one that did not is listed" is an
+answer; "the estate uses five tables" alone is not.

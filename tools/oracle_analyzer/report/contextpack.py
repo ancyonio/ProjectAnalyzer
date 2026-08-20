@@ -38,8 +38,27 @@ def _coverage_banner(graph: Graph) -> List[str]:
         f"{coverage.get('callsResolved', 0) + coverage.get('callsUnresolved', 0)} "
         f'calls resolved; '
         f"{coverage.get('dynamicSqlSites', 0)} dynamic-SQL site(s) where "
-        f'dependency analysis stops.',
+        f'dependency analysis stops; '
+        f"{coverage.get('parseQuality', 100.0)}% of code nodes parsed cleanly.",
     ]
+    quality = coverage.get('parseQuality', 100.0)
+    if quality < 90:
+        # Stated before the resolution note on purpose: an agent that reads
+        # "100% resolved" first will stop reading, and resolution is measured
+        # over whatever the parser managed to extract.
+        lines.append('>')
+        lines.append(
+            f'> Parse quality is {quality}%: '
+            f"{coverage.get('statementsPartial', 0)} statement(s) parsed only "
+            f"partially and {coverage.get('statementsFailed', 0)} failed, so "
+            f'the resolution figure above is measured over less code than the '
+            f'estate contains. Do not read it as completeness.')
+    if coverage.get('ddlUnparsed'):
+        lines.append('>')
+        lines.append(
+            f"> {coverage.get('ddlUnparsed')} DDL statement(s) matched no known "
+            f'pattern and produced no node at all; they are absent from every '
+            f'count on this page.')
     if resolution < 80:
         lines.append('>')
         lines.append('> Resolution is below 80%: treat this graph as provisional '

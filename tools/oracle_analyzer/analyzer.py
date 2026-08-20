@@ -229,6 +229,7 @@ class OracleAnalyzer(
         resolved = self.stats.get('calls_resolved', 0)
         unresolved_calls = self.stats.get('calls_unresolved', 0)
         total_calls = resolved + unresolved_calls
+        parse = self._parse_quality()
 
         return {
             'objectsDiscovered': discovered,
@@ -242,6 +243,42 @@ class OracleAnalyzer(
             'dynamicSqlSites': len(self.dynamic_sql_sites),
             'dictionaryAvailable': self.dictionary_available,
             'unresolvedReferences': sorted(self.unresolved)[:50],
+            **parse,
+        }
+
+    def _parse_quality(self) -> Dict[str, Any]:
+        """How much of the code the parser actually understood.
+
+        Resolution coverage answers "did the names bind"; this answers the
+        question underneath it, "was the code read correctly in the first
+        place". A graph built from mostly `PARTIAL` statements resolves its
+        handful of names perfectly and still describes very little, so the two
+        figures have to be reported side by side.
+
+        Counted over `SqlStatement` and `PlsqlBlock` only. A `DbProgramUnit`
+        carries the status of its own block verbatim, so including units would
+        count the same parse twice and flatter the percentage.
+        """
+        counts: Counter = Counter()
+        for node in self.nodes.values():
+            if node.label not in ('SqlStatement', 'PlsqlBlock'):
+                continue
+            counts[str(node.properties.get('parseStatus') or 'UNKNOWN')] += 1
+
+        parsed = counts.get('PARSED', 0)
+        partial = counts.get('PARTIAL', 0)
+        failed = counts.get('FAILED', 0)
+        total = sum(counts.values())
+        return {
+            'codeNodes': total,
+            'statementsParsed': parsed,
+            'statementsPartial': partial,
+            'statementsFailed': failed,
+            'parseQuality': round(parsed * 100.0 / total, 1) if total else 100.0,
+            # DDL the splitter produced but no pattern claimed. Nothing is
+            # created for these, so they are invisible in a node count.
+            'ddlStatements': self.stats.get('ddl_statements', 0),
+            'ddlUnparsed': self.stats.get('ddl_unparsed', 0),
         }
 
     def _meta(self) -> Dict[str, Any]:
