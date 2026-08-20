@@ -1,44 +1,55 @@
 # ProjectAnalyzer
 
-A comprehensive analysis solution for legacy **TIBCO BusinessWorks** estates — both
-**BW5** (`.process`) and **BW6 / BusinessWorks Container Edition** (`.bwp`) — built on a
-strict separation of concerns:
+**A deterministic analysis toolkit for legacy estates — TIBCO BusinessWorks, Oracle
+APEX, Oracle PL/SQL, and the three of them joined into one graph.**
+
+It answers, with evidence rather than inference: what is in this estate, what depends on
+what, what breaks if I change this, what is dead, what is untested, and in what order it
+should be modernised.
+
+## The one design decision everything follows from
+
+The toolkit is split across a boundary that is never crossed:
 
 | Layer | Responsibility | Implementation |
 |-------|----------------|----------------|
-| **1 — Deterministic** | Extract *facts*: artefacts, dependencies, complexity, entry points, dead code, blast radius | `tools/tibco_analyzer` (Python, standard library only) |
-| **2 — LLM** | Explain, prioritise, and write up those facts | GitHub Copilot: `.github/copilot-instructions.md`, prompt files, chat modes, and the `tibco-analyst` skill |
+| **1 — Deterministic** | Extract *facts*: artefacts, dependencies, complexity, entry points, dead code, lineage, blast radius | Four Python analyzers over a shared core, standard library only |
+| **2 — LLM** | Explain, prioritise and write up those facts | GitHub Copilot: instructions, skills, prompt files and chat modes |
 
-The boundary is the point. Counts, dependency edges and impact radii are never produced by
-a language model — they are parsed from the source tree, exported to CSV/Cypher/JSON, and
-checked by a built-in validation gate. Copilot reads that output and does what it is
-genuinely good at: interpretation, prioritisation and narrative.
+**Counts, dependency edges and impact radii are never produced by a language model.** They
+are parsed from the source tree, exported to CSV/Cypher/JSON, and checked by a built-in
+validation gate. Copilot reads that output and does what it is genuinely good at:
+interpretation, prioritisation and narrative.
 
-> **Also here: Oracle.** The same two-layer approach, shared core and Neo4j delivery cover
-> two Oracle estates as well:
->
-> - **Oracle APEX applications** — `tools/apex_analyzer`, `apex-analyze`. See
->   **[Oracle APEX analysis](#oracle-apex-analysis)**.
-> - **Oracle PL/SQL in a repository** — `tools/oracle_analyzer`, `oracle-analyze`: packages
->   split into spec and body, the call graph, column-aware data access and lineage.
->
-> The two Oracle analyzers share one database vocabulary — `DbTable`, `READS_FROM`,
-> `HAS_UNIT` mean the same thing in both graphs — so the same Cypher answers either.
+The corollary matters as much as the rule: where a fact cannot be established it is
+**recorded as a gap**, never quietly dropped. A missing edge and a deliberately-recorded
+gap look identical in a node count, and only one of them is honest.
 
-> **And the three together.** `tools/estate_analyzer`, `estate-analyze`, joins the three
-> finished graphs into one and answers what none of them can alone: which integration
-> writes the table an APEX page reports over, what a schema change breaks across every
-> estate, which tables have more than one writer, and in what order a mixed estate should
-> be cut over. It is a **read-only wrapper** — it parses no source, imports nothing from
-> the three analyzers, and writes nothing into their output directories.
-> See **[Cross-estate analysis](#cross-estate-analysis)**.
+## The four analyzers
+
+| Analyzer | Command | Estate | Graph |
+|---|---|---|---|
+| `tools/tibco_analyzer` | `tibco-analyze` | BW5 (`.process`) and BW6 / BWCE (`.bwp`) | 19 labels, 20 edge types |
+| `tools/apex_analyzer` | `apex-analyze` | Oracle APEX applications | 56 labels, 55 edge types |
+| `tools/oracle_analyzer` | `oracle-analyze` | Oracle PL/SQL in a repository | 32 labels, 37 edge types |
+| `tools/estate_analyzer` | `estate-analyze` | **all three, federated** | 82 labels, 81 edge types |
+
+The two Oracle analyzers share one database vocabulary — `DbTable`, `READS_FROM`,
+`HAS_UNIT` mean the same thing in both graphs — so the same Cypher answers either, and a
+table they both touch becomes one node the moment the graphs are unioned.
+
+`estate-analyze` is a **read-only wrapper**: it parses no source, imports nothing from the
+three analyzers, and writes nothing into their output directories. It reads their
+`graph.json` and nothing else.
 
 ---
 
 ## Contents
 
-- [What it answers](#what-it-answers)
 - [Quick start](#quick-start)
+- [Features](#features)
+- [Current implementation](#current-implementation)
+- [What it answers](#what-it-answers)
 - [Oracle APEX analysis](#oracle-apex-analysis)
 - [Cross-estate analysis](#cross-estate-analysis)
 - [Preparing your source tree](#preparing-your-source-tree)
@@ -57,39 +68,194 @@ genuinely good at: interpretation, prioritisation and narrative.
 
 ---
 
-## What it answers
-
-1. **What is in this TIBCO estate?** — full inventory, module metrics, complexity ranking,
-   entry-point catalogue, integration surface, dead code, contract catalogue.
-2. **What does it look like?** — Mermaid and PlantUML architecture diagrams generated from
-   the parsed graph, so nothing in a diagram is invented.
-3. **Where is functionality X implemented?** — hybrid semantic search over processes,
-   activities, schemas, transformations, SQL, JMS destinations and endpoint URIs.
-4. **What breaks if I change X?** — weighted blast-radius traversal that names the affected
-   entry points, the risk band, and the exact regression test scope.
-5. **In what order should it be migrated?** — dependency-ordered migration waves and a
-   graph loaded into Neo4j for open-ended querying.
-
----
-
 ## Quick start
 
 ```bash
-git clone <this-repo> && cd tibco-analysis-copilot
+git clone <this-repo> && cd <repo>
 pip install -e .                     # or: export PYTHONPATH=tools
-
-# Point it at your TIBCO estate — the whole pipeline, in order
-tibco-analyze -o analysis_output all --source /path/to/tibco_code
 ```
 
-Then open `analysis_output/reports/`, and in VS Code run the Copilot prompt
-`/tibco-bootstrap-analysis` (or `/graph-analysis`) to fill the narrative sections.
-
-Without installation, every command works as
-`PYTHONPATH=tools python -m tibco_analyzer -o analysis_output <subcommand>`.
-
-Requires Python 3.9+ and no third-party packages. Optional extras:
+Requires **Python 3.9+ and no third-party packages**. Optional extras:
 `pip install -e ".[embeddings]"` (local vectors), `".[openai]"`, `".[neo4j]"`.
+
+Then run whichever analyzer matches your estate. `all` runs the whole pipeline in
+order — parse, validate, diagrams, context packs, report scaffolds, Cypher cookbook:
+
+```bash
+# TIBCO BusinessWorks (BW5 and/or BW6)
+tibco-analyze  -o analysis_output        all --source /path/to/tibco_code
+
+# Oracle APEX  (--db-meta is optional but strongly recommended)
+apex-analyze   -o analysis_output_apex   all --source /path/to/apex_export
+
+# Oracle PL/SQL in a repository
+oracle-analyze -o analysis_output_oracle all --source /path/to/plsql --schema APP_OWNER
+```
+
+Each writes `graph.json`, the Neo4j export, `reports/`, `context/` and
+`generated_diagrams/` into its output directory, and prints a coverage block. **Read
+that block before reading anything else** — it says what the graph does not know.
+
+Once two or more estates are analysed, join them:
+
+```bash
+estate-analyze -o analysis_output_estate all \
+  --tibco analysis_output --apex analysis_output_apex --oracle analysis_output_oracle
+```
+
+Then open the `reports/` directory, and in VS Code run the matching Copilot prompt —
+`/tibco-bootstrap-analysis`, `/apex-bootstrap-analysis`, `/oracle-bootstrap-analysis`
+or `/estate-bootstrap-analysis` — to fill the `<!-- LLM: … -->` narrative sections.
+
+Without installing, every command works as
+`PYTHONPATH=tools python -m <tibco|apex|oracle|estate>_analyzer -o <dir> <subcommand>`.
+
+### Check it worked
+
+```bash
+oracle-analyze -o analysis_output_oracle validate     # exit 0 ok, 2 gate failed
+```
+
+`validate` is the gate. It exits 2 when the graph is too provisional to build on, which
+is what makes it usable in CI — see [Wiring the gates into CI](#wiring-the-gates-into-ci).
+
+---
+
+## Features
+
+### Extraction
+
+- **Four source dialects** — BW5 and BW6 process XML, APEX `wwv_flow_api` exports, Oracle
+  DDL and PL/SQL, plus an optional Oracle data-dictionary extract that is treated as
+  authoritative where present.
+- **Package structure that reflects change semantics** — an Oracle package is three nodes
+  (`DbPackage`, `PackageSpec`, `PackageBody`) because a spec change breaks every caller and
+  the same change to a body does not. Collapsing them makes the most useful impact question
+  unanswerable.
+- **Semantic data access, not a generic `USES`** — `READS_FROM`, `INSERTS_INTO`, `UPDATES`,
+  `DELETES_FROM`, plus a `WRITES_TO` roll-up, so "which procedures *modify* this table" is
+  one query.
+- **Column and join awareness** — `REFERENCES_COLUMN` binds a statement to the columns it
+  names; `JOINS` records which tables are queried together.
+- **Git provenance** — commits, authors and per-file churn, correct whether the analysed
+  root is the repository root or a subdirectory of it.
+
+### Analysis
+
+- **Weighted blast radius** — not just reachability: per-edge weights, label multipliers,
+  entry-point bonuses, a risk band and the regression test scope. Structural edges are
+  deliberately excluded, so one procedure's change does not implicate its whole package.
+- **Data lineage** — what feeds a table and what it feeds, through statements, views,
+  triggers and synonyms.
+- **Modernisation sequencing** — cutover waves derived from one rule: *a component may not
+  be cut over before the data it shares has an owner.*
+- **Rule catalogues** — deterministic security, correctness, performance and
+  technical-debt findings, each an `:Issue` node with a linked `:Recommendation`.
+- **Hybrid semantic search** (TIBCO) — BM25 with optional local or API embeddings.
+- **Business and test layers** (Oracle) — `BusinessDomain` / `BusinessFunction` seeded from
+  package grouping and writes, and `TestCase` built from utPLSQL annotations, so "what is
+  this for" and "what proves it still works" become graph questions.
+
+### Honesty
+
+- **A coverage contract on every run** — parse quality, resolution coverage, call
+  resolution, dynamic-SQL sites, unparsed DDL, and for the federation, datasource and
+  SQL-bind coverage.
+- **Provenance on every node** — `origin` distinguishes parsed from dictionary-sourced from
+  inferred from derived from declared, with `confidence` where it is not certain.
+- **Gates that fail the build** — `validate` exits 2 below threshold, so a provisional graph
+  cannot silently become a delivered report.
+- **Unresolvable references become nodes** — `UnresolvedRef` and `ExternalReference` make the
+  edge of the analysis visible instead of absent.
+
+### Delivery
+
+- **Neo4j export** — admin-import CSV pair, a runnable Cypher script and an index sidecar;
+  `scripts/push_to_neo4j.py` loads it over Bolt.
+- **Cypher cookbooks** — 67 curated queries across the four analyzers, each with its
+  purpose, emitted alongside the graph and mirrored into the skill references.
+- **Diagrams** — Mermaid and offline-safe PlantUML generated from the parsed graph, so
+  nothing in a diagram is invented.
+- **Context packs** — budgeted, coverage-banner-first Markdown for grounding an LLM.
+- **Report scaffolds** — generated tables with `<!-- LLM: … -->` slots for the narrative.
+
+---
+
+## Current implementation
+
+Production-ready for all four estates. **129 tests pass**; ~24,500 lines of Python with
+**zero required runtime dependencies**, so it runs on an air-gapped build agent.
+
+| Capability | TIBCO | APEX | Oracle | Estate |
+|---|:--:|:--:|:--:|:--:|
+| Parse → graph → Neo4j export | ✅ | ✅ | ✅ | ✅ |
+| Validation gate (CI exit 2) | ✅ | ✅ | ✅ | ✅ |
+| Rule catalogue | ✅ | ✅ | ✅ | ✅ |
+| Weighted blast radius | ✅ | ✅ | ✅ | ✅ |
+| Diagrams · context packs · reports | ✅ | ✅ | ✅ | ✅ |
+| Coverage contract | ✅ | ✅ | ✅ | ✅ |
+| Git provenance | — | ✅ | ✅ | — |
+| Data lineage | — | — | ✅ | ✅ |
+| Column-level references | — | ✅ | ✅ | — |
+| Business layer | — | ✅ | ✅ | — |
+| Test layer (utPLSQL) | — | — | ✅ | — |
+| Parse-quality reporting | — | — | ✅ | — |
+| Semantic search | ✅ | — | — | — |
+| Cutover sequencing | ✅ | — | — | ✅ |
+
+**Copilot assets:** 6 skills with 19 reference guides, 22 prompt files, 12 chat modes and
+4 path-scoped instruction files.
+
+### Known limits — stated, not hidden
+
+- **Column-to-column flow is not modelled.** `REFERENCES_COLUMN` records that a statement
+  *names* a column, not that one column populates another.
+- **Dynamic SQL is where dependency analysis stops.** It is flagged (`SEC-001`,
+  `dynamicSqlSites`) rather than guessed at. A "dead" object may be reached from exactly
+  there.
+- **Local variables, cursors and user-defined exceptions are not nodes.** Modelling every
+  local declaration inflates node count by an order of magnitude and buries the structure
+  that matters.
+- **Business rules are not extracted.** A `CHECK` constraint encodes one, but recovering it
+  means interpreting the expression, and this toolkit does not interpret.
+- **TIBCO shares no ids with the database estates**, so every TIBCO-to-database edge is
+  inferred and carries `basis` and `confidence`. Bare-name matching is off by default.
+- **The parsers are pattern-based, not grammar-based.** A deliberate trade for zero
+  dependencies and honest degradation; `parseQuality` and `ddlUnparsed` exist so you can
+  tell when it stops being the right trade.
+
+---
+
+## What it answers
+
+**Any estate**
+
+1. **What is in it?** — full inventory, complexity ranking, entry-point catalogue, dead
+   code, and the artefacts that carry the most dependencies.
+2. **What does it look like?** — Mermaid and PlantUML diagrams generated from the parsed
+   graph, so nothing in a diagram is invented.
+3. **What breaks if I change X?** — weighted blast-radius traversal naming the affected
+   entry points, the risk band and the exact regression test scope.
+4. **What is wrong with it?** — deterministic security, correctness, performance and
+   technical-debt findings, each traceable to a file and a line.
+5. **How much of this can I trust?** — a coverage contract on every run, and a gate that
+   fails the build when the graph is too provisional to build on.
+
+**Per estate**
+
+6. **Where is functionality X implemented?** (TIBCO) — hybrid semantic search over
+   processes, activities, schemas, transformations, SQL, JMS destinations and endpoints.
+7. **Where does this data come from and go?** (Oracle) — table and statement-level lineage
+   through views, triggers and synonyms.
+8. **What is this code *for*, and what proves it still works?** (Oracle, APEX) — a business
+   layer seeded from structure and writes, and a test layer built from utPLSQL annotations.
+
+**Across all three at once**
+
+9. **Which integration writes the table this APEX page reports over?** — and every other
+   question that needs two estates joined.
+10. **In what order should a mixed estate be cut over?** — derived migration waves, plus
+    what must be decided before any of it means anything.
 
 ---
 
@@ -728,8 +894,8 @@ keep the rest generated.
 | Repository instructions | `.github/copilot-instructions.md` | Deterministic-first rules, citation standard, diagram rules, anti-hallucination checklist |
 | Agent instructions | `AGENTS.md` | The same contract in short form, for any agent that reads `AGENTS.md` rather than the Copilot files |
 | Path-scoped instructions | `.github/instructions/*.instructions.md` | One per estate. Fires when a source artefact is in context — `.process`/`.bwp`/`.xsd` for TIBCO, `f*.sql`/`page_*.sql` for APEX, `.pks`/`.pkb`/`.trg` for Oracle, and `estate_map.json` or `analysis_output_estate/**` for the federation — and routes the question through the analyzer instead of the file |
-| Skills | `.github/skills/{tibco,apex,oracle,estate}-analyst/SKILL.md` | Task playbooks, graph model, Cypher cookbook, search and impact guides, report templates |
-| Prompt files | `.github/prompts/*.prompt.md` | TIBCO: `/tibco-bootstrap-analysis`, `/graph-analysis`, `/architecture-diagrams`, `/discover-baseline`, `/tibco-locate-functionality`, `/tibco-impact-analysis`, `/tibco-neo4j-queries`. APEX and Oracle: `/{apex,oracle}-bootstrap-analysis`, `/{apex,oracle}-impact-analysis`, `/{apex,oracle}-security-review`, `/{apex,oracle}-neo4j-queries`, `/oracle-data-lineage`. Cross-estate: `/estate-bootstrap-analysis`, `/estate-impact-analysis`, `/estate-cutover-sequence`, `/estate-neo4j-queries` |
+| Skills | `.github/skills/*/SKILL.md` | Four estate skills (`{tibco,apex,oracle,estate}-analyst`) plus two cross-cutting ones: `analysis-trust` (how to read coverage, provenance and confidence before making a claim) and `migration-planner` (scoping a modernisation from the graph). 19 reference guides in total |
+| Prompt files | `.github/prompts/*.prompt.md` | 22 files. Generic: `/graph-analysis`, `/architecture-diagrams`, `/discover-baseline`. Per estate: `/{tibco,apex,oracle,estate}-bootstrap-analysis`, `/{…}-impact-analysis`, `/{…}-neo4j-queries`, `/{tibco,apex,oracle}-security-review`. Specialised: `/tibco-locate-functionality`, `/oracle-data-lineage`, `/estate-data-lineage`, `/estate-cutover-sequence` |
 | Chat modes | `.github/chatmodes/*.chatmode.md` | `{tibco,apex,oracle,estate}-analyst`, `{tibco,apex,oracle,estate}-impact`, `{tibco,apex,oracle,estate}-diagrammer` |
 
 A working order for the prompts:
@@ -762,32 +928,45 @@ the tool wins.
 Two layers, one boundary:
 
 ```
-TIBCO source tree
-      │
-      ▼
-┌─────────────────────────────────────────────┐
-│ Layer 1 — deterministic (Python)            │
-│  parsers ─► knowledge graph ─► analytics    │
-│                     │                       │
-│      ┌──────────────┼──────────────┐        │
-│      ▼              ▼              ▼        │
-│  Neo4j export   search index   diagrams     │
-│      └──────────────┼──────────────┘        │
-│                     ▼                       │
-│            context packs + report scaffolds │
-└─────────────────────────────────────────────┘
-                      │  facts only
-                      ▼
-┌─────────────────────────────────────────────┐
-│ Layer 2 — GitHub Copilot                    │
-│  instructions · skill · prompts · chatmodes │
-│  interpretation, prioritisation, narrative  │
-└─────────────────────────────────────────────┘
+  TIBCO tree        APEX export       Oracle tree      (+ optional
+  .process/.bwp     wwv_flow_api      .pks/.pkb/.sql    dictionary
+       │                 │                 │             extract)
+       ▼                 ▼                 ▼
+┌────────────────────────────────────────────────────────────────┐
+│ Layer 1 — deterministic (Python, stdlib only)                  │
+│                                                                │
+│   tibco_analyzer   apex_analyzer   oracle_analyzer             │
+│         └────────────────┴────────────────┘                    │
+│                   analyzer_core                                │
+│         (graph model · ids · SQL+PL/SQL · impact)              │
+│                          │                                     │
+│                    graph.json ×3                               │
+│                          │                                     │
+│                          ▼                                     │
+│                   estate_analyzer      read-only federation    │
+│                          │             (parses no source)      │
+│      ┌───────────────────┼───────────────────┐                 │
+│      ▼                   ▼                   ▼                 │
+│  Neo4j export      search index          diagrams              │
+│      └───────────────────┼───────────────────┘                 │
+│                          ▼                                     │
+│   validation gate ─► context packs + report scaffolds          │
+└────────────────────────────────────────────────────────────────┘
+                           │  facts only, with coverage attached
+                           ▼
+┌────────────────────────────────────────────────────────────────┐
+│ Layer 2 — GitHub Copilot                                       │
+│  instructions · 6 skills · 22 prompts · 12 chatmodes           │
+│  interpretation, prioritisation, narrative                     │
+└────────────────────────────────────────────────────────────────┘
 ```
 
 Anything countable, traversable or verifiable belongs to Layer 1. Anything requiring
 judgement belongs to Layer 2. A number that appears in a delivered report can always be
 traced to a parse; a recommendation can always be traced to a number.
+
+Each analyzer follows the same internal shape, so knowing one is knowing all four. The
+TIBCO analyzer, as the worked example:
 
 | Module | Responsibility |
 |--------|----------------|
@@ -822,10 +1001,12 @@ AGENTS.md                        Short agent contract, read by Copilot and other
   instructions/                  Path-scoped rules, one per estate plus the federation
   prompts/                       Task prompt files (TIBCO, APEX, Oracle, cross-estate)
   chatmodes/                     Chat modes (TIBCO, APEX, Oracle, cross-estate)
-  skills/tibco-analyst/          The TIBCO skill: SKILL.md + six reference guides
-  skills/apex-analyst/           The APEX skill: SKILL.md + four reference guides
-  skills/oracle-analyst/         The Oracle PL/SQL skill
-  skills/estate-analyst/         The cross-estate skill
+  skills/tibco-analyst/          TIBCO skill: SKILL.md + seven reference guides
+  skills/apex-analyst/           APEX skill: SKILL.md + four reference guides
+  skills/oracle-analyst/         Oracle PL/SQL skill: SKILL.md + five reference guides
+  skills/estate-analyst/         Cross-estate skill: SKILL.md + three reference guides
+  skills/analysis-trust/         Cross-cutting: reading coverage, provenance, confidence
+  skills/migration-planner/      Cross-cutting: scoping a modernisation from the graph
                                  — the ONLY editable copies of the skills
 tools/analyzer_core/             Dialect-agnostic core, shared by both analyzers
   model.py                       Graph, GraphNode, GraphRel (the deterministic artefact)
@@ -840,7 +1021,9 @@ tools/oracle_analyzer/           Oracle PL/SQL analyzer
   analyzer.py                    Orchestrates the Oracle parse
   parsers/                       Source scan, DDL objects, packages and units,
                                  dictionary merge, git history, cross-reference
-  analysis/                      Inventory, lineage, metrics, rule catalogue
+  analysis/                      Inventory, lineage, metrics, rule catalogue,
+                                 business seed (semantics.py), utPLSQL tests
+                                 (tests_catalog.py)
   graph/                         Oracle Neo4j schema, Cypher cookbook, validation rules
   diagrams/  report/             Mermaid, reports and context packs
   cli.py                         `oracle-analyze`
@@ -873,7 +1056,8 @@ tools/tibco_analyzer/
 tests/
   fixtures/apex/                 A small APEX export + schema DDL with seeded defects
   fixtures/oracle/               A small Oracle estate: packages with spec and body, an
-                                 overload, dynamic SQL, an unresolvable call
+                                 overload, dynamic SQL, an unresolvable call, a
+                                 user-defined type, and a utPLSQL suite
   fixtures/tibco/                One BW5 and one BW6 module, since the two generations
                                  share almost no file conventions
   fixtures/estate/               The cross-estate fixture: a mapped BW6 module, an
@@ -890,8 +1074,10 @@ scripts/
 .env.example                     Template for Neo4j connection settings (copy to .env)
 ```
 
-The skill lives only in `.github/skills/tibco-analyst/`. There is no generated bundle and
-nothing to keep synchronised — edit it in place.
+The skills live only in `.github/skills/`. There is no generated bundle and nothing to
+keep synchronised — edit them in place. Two reference files are generated rather than
+written: each `cypher-cookbook.md` is rendered from that analyzer's `graph/queries.py`,
+and carries the command to regenerate it in a comment at the top.
 
 ---
 
